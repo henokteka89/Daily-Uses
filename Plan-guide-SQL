@@ -1,0 +1,63 @@
+ 
+EXEC sp_create_plan_guide 
+    @name = N'GuideName',
+    @stmt = N'SELECT ... FROM ... WHERE ...', 
+    @type = N'SQL', 
+    @module_or_batch = NULL, 
+    @params = NULL, 
+    @hints = N'OPTION (INDEX (index_name))';
+
+Plan Guide
+USE AdventureWorks2012;
+GO
+
+-- Identify the query
+DECLARE @query AS NVARCHAR(MAX);
+SET @query = N'SELECT * FROM Sales.SalesOrderDetail WHERE ProductID = @ProductID';
+
+-- Create the plan guide
+EXEC sp_create_plan_guide 
+    @name = N'SalesOrderDetail_PlanGuide',
+    @stmt = @query,
+    @type = N'SQL',
+    @module_or_batch = NULL,
+    @params = N'@ProductID int',
+    @hints = N'OPTION (FORCE ORDER, INDEX (IX_SalesOrderDetail_ProductID))';
+ 
+ 
+EXEC sp_create_plan_guide 
+    @name = N'GuideName',
+    @stmt = N'SELECT ... FROM ... WHERE ...', 
+    @type = N'SQL', 
+    @module_or_batch = NULL, 
+    @params = NULL, 
+    @hints = N'OPTION (INDEX (index_name))';
+ 
+
+-- Identify the query
+DECLARE @query AS NVARCHAR(MAX);
+SET @query = N'SELECT * FROM Sales.SalesOrderDetail WHERE ProductID = @ProductID';
+
+-- Create the plan guide
+EXEC sp_create_plan_guide 
+    @name = N'SalesOrderDetail_PlanGuide',
+    @stmt = @query,
+    @type = N'SQL',
+    @module_or_batch = NULL,
+    @params = N'@ProductID int',
+    @hints = N'OPTION (FORCE ORDER, INDEX (IX_SalesOrderDetail_ProductID))';
+GO
+Explanation of Parameters
+@name: Name of the plan guide.
+@stmt: The exact query text you want to optimize.
+@type: Specifies the type of plan guide. For ad-hoc SQL, use 'SQL'.
+@module_or_batch: If the query is part of a stored procedure or function, specify its name here. Otherwise, set to NULL.
+@params: The parameter list for the query, if applicable.
+@hints: The query hints you want to apply. In this case, forcing the use of a specific index.
+Managing Plan Guides
+You can also manage your plan guides with the following procedures:
+ 
+EXEC sp_control_plan_guide N'DISABLE', N'SalesOrderDetail_PlanGuide';
+EXEC sp_control_plan_guide N'ENABLE', N'SalesOrderDetail_PlanGuide';
+Important Considerations
+ 
