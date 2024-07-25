@@ -1,0 +1,69 @@
+--TSQL
+
+DECLARE @subject NVARCHAR(500)
+DECLARE @body NVARCHAR(MAX)
+DECLARE @currentTime NVARCHAR(100)
+DECLARE @serverName NVARCHAR(500)
+
+-- Get the current server name
+SET @serverName = CAST(@@SERVERNAME AS NVARCHAR(500))
+
+-- Set the current time
+SET @currentTime = CONVERT(NVARCHAR(20), GETDATE(), 120) -- yyyy-mm-dd hh:mi:ss (24h format)
+---SET @currentTime = CONVERT(NVARCHAR(10), GETDATE(), 101) + ' ' + CONVERT(NVARCHAR(8), GETDATE(), 108) ---american mm-dd-yy and 24hr format
+
+
+-- Set the email subject to include the server name
+SET @subject = 'Server Reboot Completed on ' + @serverName
+
+-- Email body
+SET @body = 'Server Reboot Notification'  + CHAR(13) + CHAR(10) +
+            'Server Name: ' + @serverName + CHAR(13) + CHAR(10) +
+            'Reboot Time: ' + @currentTime + CHAR(13) + CHAR(10) +
+            'Reboot Status: SUCCESSFULLY COMPLETED' + CHAR(13) + CHAR(10) + CHAR(13) + CHAR(10) +
+            '------------------------------------------------' + CHAR(13) + CHAR(10) +
+            'ATTENTION: The SQL Server instance on ' + @serverName + ' has been successfully restarted.' + CHAR(13) + CHAR(10) +
+            'Please verify all systems are functioning as expected.' + CHAR(13) + CHAR(10) +
+            '------------------------------------------------'
+
+EXEC msdb.dbo.sp_send_dbmail
+@profile_name = 'HenokEmailProfile',
+@recipients = 'henokteka89@gmail.com',
+@subject = @subject,
+@body = @body,
+@body_format = 'TEXT'
+
+
+----
+
+
+
+--- HTML
+DECLARE @subject VARCHAR(500)
+DECLARE @body NVARCHAR(MAX)
+DECLARE @currentTime NVARCHAR(100)
+DECLARE @serverName NVARCHAR(500)
+
+-- Get the current server name
+SET @serverName = CAST(@@SERVERNAME AS NVARCHAR(500))
+
+-- Set the current time
+SET @currentTime = CONVERT(NVARCHAR(20), GETDATE(), 120) -- yyyy-mm-dd hh:mi:ss (24h format)
+
+-- Set the email subject
+SET @subject = 'Service Reboot Completed on ' + @serverName
+
+-- Email body
+SET @body = N'<strong>Service Reboot Notification</strong><br />' +
+            N'<br />Server Name: <strong>' + @serverName + '</strong>' +
+            N'<br />Reboot Time: <strong>' + @currentTime + '</strong>' +
+            N'<br />Reboot Status: <strong>Successfully Completed</strong>' +
+            N'<br /><br /><em>Attention:</em> The SQL Server instance on ' + @serverName + ' has been successfully restarted. ' +
+            N'Please verify all systems are functioning as expected and report any discrepancies.'
+
+EXEC msdb.dbo.sp_send_dbmail
+@profile_name = 'MYEmailProfile',
+@recipients = 'henokXXX@gmail.com; kabXXX@gmail.com; henokXXX@yahoo.com',
+@subject = @subject,
+@body = @body,
+@body_format = 'HTML' -- Set the body format to HTML for better formatting
