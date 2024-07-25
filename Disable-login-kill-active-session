@@ -1,0 +1,29 @@
+ 
+DECLARE @DisableLoginsSQL NVARCHAR(MAX) = N'';
+DECLARE @KillSessionsSQL NVARCHAR(MAX) = N'';
+
+-- Exclude system logins, the current user, and service accounts containing 'SVC'
+SELECT @DisableLoginsSQL += 'ALTER LOGIN [' + name + '] DISABLE;' + CHAR(13)
+FROM sys.sql_logins
+WHERE name NOT IN ('sa', SUSER_NAME())
+  AND name NOT LIKE '%$'
+  AND name NOT LIKE '%SVC%';
+
+-- Print the generated script for disabling logins
+PRINT '-- Disable Logins Script --'
+PRINT @DisableLoginsSQL;
+
+-- Generate the kill sessions script
+SELECT @KillSessionsSQL += 'KILL ' + CAST(session_id AS NVARCHAR(10)) + ';' + CHAR(13)
+FROM sys.dm_exec_sessions
+WHERE login_name NOT IN ('sa', SUSER_NAME())
+  AND login_name NOT LIKE '%$'
+  AND login_name NOT LIKE '%SVC%';
+
+-- Print the generated script for killing active sessions
+PRINT '-- Kill Active Sessions Script --'
+PRINT @KillSessionsSQL;
+
+-- Uncomment the following lines to execute the scripts
+-- EXEC sp_executesql @DisableLoginsSQL;
+-- EXEC sp_executesql @KillSessionsSQL;
