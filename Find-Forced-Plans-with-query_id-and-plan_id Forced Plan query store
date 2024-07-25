@@ -1,0 +1,21 @@
+--Find the Queries with forced plan: Query_id, text and Planid and associated stored proc name
+SELECT
+    qsq.query_id,
+    qsqt.query_sql_text,
+    qsp.plan_id,
+    qsp.is_forced_plan,
+    qsp.force_failure_count,
+    qsp.last_force_failure_reason_desc,
+    --qsp.creation_time,
+    qsp.last_execution_time,
+    COALESCE(so.name, 'Ad-Hoc') AS procedure_name
+FROM
+    sys.query_store_plan qsp
+JOIN
+    sys.query_store_query qsq ON qsp.query_id = qsq.query_id
+JOIN
+    sys.query_store_query_text qsqt ON qsq.query_text_id = qsqt.query_text_id
+LEFT JOIN
+    sys.objects so ON qsq.object_id = so.object_id
+WHERE
+    qsp.is_forced_plan = 1;
