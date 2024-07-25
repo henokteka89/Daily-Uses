@@ -1,0 +1,8 @@
+https://techcommunity.microsoft.com/t5/sql-server-support-blog/msdtc-recommendations-on-sql-failover-cluster/ba-p/318037
+
+---CHECKING MSDTC
+  BEGIN DISTRIBUTED TRANSACTION
+  USE DATABASENAMEHERE
+  SELECT TOP (100) * FROM ORDERS
+  --ROLLBACK TRANSACTION
+  COMMIT TRANSACTION
