@@ -1,0 +1,22 @@
+ -- Create the table
+CREATE TABLE StaticMaskingTest (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    FullName NVARCHAR(100),
+    Email NVARCHAR(100),
+    CreditCardNumber NVARCHAR(16),
+    SSN NVARCHAR(11),
+    PhoneNumber NVARCHAR(15)
+);
+
+-- Insert 10 records with realistic data
+INSERT INTO StaticMaskingTest (FullName, Email, CreditCardNumber, SSN, PhoneNumber) VALUES
+('John Doe', 'johndoe@example.com', '4111111111111111', '123-45-6789', '555-123-4567'),
+('Jane Smith', 'janesmith@example.com', '5500000000000004', '987-65-4321', '555-234-5678'),
+('Alice Johnson', 'alicejohnson@example.com', '340000000000009', '111-22-3333', '555-345-6789'),
+('Bob Brown', 'bobbrown@example.com', '30000000000004', '222-33-4444', '555-456-7890'),
+('Charlie Davis', 'charliedavis@example.com', '6011000000000004', '333-44-5555', '555-567-8901'),
+('David Wilson', 'davidwilson@example.com', '201400000000009', '444-55-6666', '555-678-9012'),
+('Eva Martin', 'evamartin@example.com', '3088000000000009', '555-66-7777', '555-789-0123'),
+('Frank Harris', 'frankharris@example.com', '6011000000000016', '666-77-8888', '555-890-1234'),
+('Grace Lee', 'gracelee@example.com', '379000000000001', '777-88-9999', '555-901-2345'),
+('Henry Clark', 'henryclark@example.com', '6011111111111117', '888-99-0000', '555-012-3456');
