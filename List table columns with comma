@@ -1,0 +1,19 @@
+---Get comma-separated lists columns in a table
+ 
+
+use database-name
+go
+
+DECLARE @TableName NVARCHAR(128) = 'orders'; ---table name
+DECLARE @TableSchema NVARCHAR(128) = 'sales'; -- Default schema is usually 'dbo'
+
+SELECT 
+    STUFF(
+        (
+            SELECT ', ' + COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = @TableName
+              AND TABLE_SCHEMA = @TableSchema
+            ORDER BY ORDINAL_POSITION
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS Columns;
