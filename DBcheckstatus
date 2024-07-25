@@ -1,0 +1,173 @@
+-Create SP first
+USE [DBAUtilization]
+GO
+
+/****** Object: StoredProcedure [dbo].[DBA_DatabaseStateCheck] Script Date: 8/4/2023 9:42:21 AM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+Create procedure [dbo].[DBA_DatabaseStateCheck]
+(
+
+@emailTo VARCHAR(100) = 'mailto:xyzabcd@gmail.com;mailto:henokxyzabc@gmail.com',
+@Severity varchar(32) = 'Warning'
+,@AlertType varchar(32) = 'DatabaseState'
+
+,@PageTo VARCHAR(200) = 'mailto:abdahxyz123@gmail.com;mailto:henokxyzabc@gmail.com;mailto:henokxyzabc87@yahoo.com'
+,@excluded_dbs sysname=null
+
+)
+AS
+BEGIN
+/*
+Date: 02/08/2023
+
+Description:
+This script is used to detect offline and suspect databases and send an alert if one is found
+
+
+
+
+@excluded_dbs: if you need to exclude databases that are offline/suspect from alerting may be until fix is performed or to temporarily supress the alert you can list the databases here 
+
+Example 1: Checks for offline and suspect databases 
+
+EXEC DBAUtil..[DBA_DatabaseStateCheck] 
+
+
+Example 2:: you can list one or more databases that need to be excludedfrom alerting. Please use the format shown below to exclude databases 
+EXEC DBAUtil..[DBA_DatabaseStateCheck] @excluded_dbs = '(''Bing'', ''Bing2'')'
+
+*/
+Declare @body nvarchar(max)
+Declare @title nvarchar(256)
+Declare @xml nvarchar(max)
+Declare @SQL nvarchar(max)
+
+IF OBJECT_ID('tempdb..#state') IS NOT NULL 
+drop table #state 
+
+CREATE TABLE #state (
+[DatabaseName] nvarchar(128)
+,[state] tinyint
+,state_desc nvarchar(60)
+
+);
+
+INSERT INTO #state SELECT Name,state,state_desc
+From sys.databases
+where state in (4,6) 
+IF @excluded_dbs IS NOT NULL
+BEGIN
+SET @SQL = 'DELETE FROM #state WHERE DatabaseName IN ' + @excluded_dbs
+
+EXEC (@SQL)
+END
+
+IF Exists (select 1 from #state where state in (4,6) ) 
+BEGIN 
+SELECT @title ='SQLQC Alert (Warning) -offline or suspect database detected on :' +@@SERVERNAME
+SET @xml = CAST(( SELECT [DatabaseName] AS 'td','',state_desc AS 'td','' From #state 
+FOR XML PATH('tr'), ELEMENTS ) AS NVARCHAR(MAX))
+
+SET @body ='<html><body><H3>Databases with offline or suspect state</H3>
+<table border = 1> 
+<tr>
+<th> DatabaseName </th> <th> DatabaseState </th></tr>' 
+
+SET @body = @body + @xml 
++'</table></body></html>'
+
+-- Send email
+EXEC msdb.dbo.sp_send_dbmail 
+@profile_name = 'HenokEmailProfile',
+@recipients = 'kabdahlabcd123@gmail.com;henokxyzabc89@gmail.com',
+@body_format = 'HTML',
+@subject = @title,
+@body = @body;
+
+END
+
+END
+
+GO
+
+
+
+ 
+....
+
+
+--SQLjob
+
+ USE [msdb]
+GO
+
+/****** Object: Job [DBA_DatabaseStateCheck] Script Date: 8/4/2023 9:32:54 AM ******/
+BEGIN TRANSACTION
+DECLARE @ReturnCode INT
+SELECT @ReturnCode = 0
+/****** Object: JobCategory [[Uncategorized (Local)]] Script Date: 8/4/2023 9:32:55 AM ******/
+IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name=N'[Uncategorized (Local)]' AND category_class=1)
+BEGIN
+EXEC @ReturnCode = msdb.dbo.sp_add_category @class=N'JOB', @type=N'LOCAL', @name=N'[Uncategorized (Local)]'
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+
+END
+
+DECLARE @jobId BINARY(16)
+EXEC @ReturnCode = msdb.dbo.sp_add_job @job_name=N'DBA_DatabaseStateCheck', 
+@enabled=1, 
+@notify_level_eventlog=0, 
+@notify_level_email=0, 
+@notify_level_netsend=0, 
+@notify_level_page=0, 
+@delete_level=0, 
+@description=N'No description available.', 
+@category_name=N'[Uncategorized (Local)]', 
+@owner_login_name=N'sa', @job_id = @jobId OUTPUT
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+/****** Object: Step [DBA_DatabaseStateCheck] Script Date: 8/4/2023 9:32:56 AM ******/
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'DBA_DatabaseStateCheck', 
+@step_id=1, 
+@cmdexec_success_code=0, 
+@on_success_action=1, 
+@on_success_step_id=0, 
+@on_fail_action=2, 
+@on_fail_step_id=0, 
+@retry_attempts=0, 
+@retry_interval=0, 
+@os_run_priority=0, @subsystem=N'TSQL', 
+@command=N'EXEC [DBA_DatabaseStateCheck]', 
+@database_name=N'DBAUtilization', 
+@flags=0
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+EXEC @ReturnCode = msdb.dbo.sp_update_job @job_id = @jobId, @start_step_id = 1
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+EXEC @ReturnCode = msdb.dbo.sp_add_jobschedule @job_id=@jobId, @name=N'DBA_DatabaseStateCheck', 
+@enabled=1, 
+@freq_type=4, 
+@freq_interval=1, 
+@freq_subday_type=4, 
+@freq_subday_interval=5, 
+@freq_relative_interval=0, 
+@freq_recurrence_factor=0, 
+@active_start_date=20230208, 
+@active_end_date=99991231, 
+@active_start_time=0, 
+@active_end_time=235959, 
+@schedule_uid=N'bdec88a5-2d8b-4e11-93a8-0ef85a6478a6'
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+EXEC @ReturnCode = msdb.dbo.sp_add_jobserver @job_id = @jobId, @server_name = N'(local)'
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+COMMIT TRANSACTION
+GOTO EndSave
+QuitWithRollback:
+IF (@@TRANCOUNT > 0) ROLLBACK TRANSACTION
+EndSave:
+GO
+
