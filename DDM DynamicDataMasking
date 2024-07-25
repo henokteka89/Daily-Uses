@@ -1,0 +1,59 @@
+Identify Masked Columns
+
+SELECT 
+    t.name AS TableName, 
+    c.name AS ColumnName, 
+    m.masking_function AS MaskingFunction
+FROM 
+    sys.masked_columns AS m
+JOIN 
+    sys.columns AS c ON m.column_id = c.column_id AND m.object_id = c.object_id
+JOIN 
+    sys.tables AS t ON c.object_id = t.object_id;
+-------------------------------------------------------------
+-------------------------------------------------------------
+-- Add Masking
+ 
+-- Masking with default function (full masking for strings, 0 for numeric)
+ALTER TABLE CustomerInfo
+ALTER COLUMN FirstName ADD MASKED WITH (FUNCTION = 'default()');
+
+ALTER TABLE CustomerInfo
+ALTER COLUMN LastName ADD MASKED WITH (FUNCTION = 'default()');
+
+ALTER TABLE CustomerInfo
+ALTER COLUMN Email ADD MASKED WITH (FUNCTION = 'email()');
+
+-- Masking with custom string function
+ALTER TABLE CustomerInfo
+ALTER COLUMN PhoneNumber ADD MASKED WITH (FUNCTION = 'partial(1,"XXX-XXX-",0)');
+
+-- Masking with custom number function
+ALTER TABLE CustomerInfo
+ALTER COLUMN CreditCardNumber ADD MASKED WITH (FUNCTION = 'partial(0,"****-****-****-",4)');
+
+ALTER TABLE CustomerInfo
+ALTER COLUMN SSN ADD MASKED WITH (FUNCTION = 'partial(0,"XXX-XX-",4)');
+
+-- Masking with default numeric function
+ALTER TABLE CustomerInfo
+ALTER COLUMN Salary ADD MASKED WITH (FUNCTION = 'default()');
+
+------------------------------------------------------------------
+------------------------------------------------------------------
+--Drop data masking (remove masking from masked columns)
+ALTER TABLE [tablename]
+ALTER COLUMN [columnname] DROP MASKED
+---------------------------------------------------------
+---------------------------------------------------------
+
+--Grant and Revoke Masking 
+
+GRANT UNMASK TO TestUser; -- Grant UNMASK permission to the user
+REVOKE UNMASK FROM TestUser; -- Revoke UNMASK permission from the user
+-----------------------------------------------------------------------
+------------------------------------------------------------------------
+-- Test users (users must not be db_owners or sysadmins, users with either of these privileges can see masked data)
+EXECUTE AS USER = 'TestUser';
+SELECT * FROM dbo.Employees; -- Assuming this table has masked columns
+REVERT; --Returns back to the previous user
