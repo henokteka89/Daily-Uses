@@ -1,0 +1,37 @@
+USE msdb;
+GO
+
+-- Create a job to monitor restore status and notify on completion
+EXEC sp_add_job
+    @job_name = 'MonitorRestoreJob',
+    @enabled = 1,
+    @description = 'Job to monitor restore status and notify on completion';
+
+-- Add a step to check restore status
+EXEC sp_add_jobstep
+    @job_name = 'MonitorRestoreJob',
+    @step_name = 'CheckRestoreStatus',
+    @subsystem = 'TSQL',
+    @command = '
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM sys.dm_exec_requests
+        WHERE command = ''RESTORE DATABASE''
+    )
+    BEGIN
+        -- Send email notification
+        EXEC msdb.dbo.sp_send_dbmail
+            @profile_name = ''SQLServerMailProfile'',
+            @recipients = ''your-email@example.com'',
+            @subject = ''Database Restore Completed'',
+            @body = ''The restore process has completed successfully.'',
+            @body_format = ''HTML'';
+    END
+    ELSE
+    BEGIN
+        -- Exit the job without sending notification
+        RAISERROR(''Restore operation is still in progress.'', 10, 1);
+    END',
+    @retry_attempts = 0,
+    @retry_interval = 0;
+GO
