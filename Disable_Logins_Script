@@ -1,0 +1,43 @@
+ 
+--Only values GRANT or DENY are allowed
+--DECLARE @Action varchar(10) = 'DENY' --To Deny access (Uncomment this line to disable logins and execute)
+--DECLARE @Action varchar(10) = 'GRANT' --To Grant Access (Uncomment this line to Enable logins and execute)
+
+--------------------------------------------------- DO NOT MODIFY CODE BELOW !!! ------------------------------------
+SET NOCOUNT ON
+DECLARE @rc int, @rn int, @mystr varchar(max), @name varchar(100)
+
+IF @Action NOT IN ('GRANT','DENY')
+SET @Action = 'GRANT'
+
+DROP TABLE IF EXISTS #Temp1
+
+select name,status, ROW_NUMBER() over(order by name) as rn
+into #Temp1
+from sys.syslogins
+where sysadmin = 0
+--and status = 9
+and name not like '##%'
+and name not like 'NT %'
+--and name not like 'XYZ\SVC-SQLPROXY%' ---service accounts
+--and name not like 'XYZABC\SVC-SCOM%'
+and name not in (select service_account from sys.dm_server_services)
+order by name
+
+SELECT @rc = @@RowCOUNT, @rn =1 
+PRINT LTRIM(STR(@rc)) + ' logins be will processed'
+WHILE (@rn <= @rc)
+BEGIN
+SELECT @name = name FROM #Temp1 WHERE rn = @rn
+SET @mystr = 'USE master
+GO
+'+ @Action + ' CONNECT SQL TO [' + @name + '];'
+PRINT @mystr
+--EXEC (@mystr)
+IF @@Error = 0
+PRINT '--Successfully ' + CASE WHEN @Action = 'GRANT' THEN 'granted' ELSE 'denied' End + ' CONNECT permissions to SQL Server to login [' + @name + ']'
+
+SET @rn = @rn + 1
+END
+
+
