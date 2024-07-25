@@ -1,0 +1,16 @@
+DECLARE @ProcedureName NVARCHAR(128) = 'YourStoredProcedureName'; -- Replace 'YourStoredProcedureName' with the name of your stored procedure
+
+SELECT 
+    [cp].[usecounts],
+    [st].[text] AS [ProcedureDefinition],
+    [qp].[query_plan] AS [ExecutionPlan]
+FROM 
+    sys.dm_exec_cached_plans AS cp
+CROSS APPLY 
+    sys.dm_exec_sql_text([cp].[plan_handle]) AS st
+CROSS APPLY 
+    sys.dm_exec_query_plan([cp].[plan_handle]) AS qp
+WHERE 
+    [st].[text] LIKE '%' + @ProcedureName + '%'
+    AND [cp].[objtype] = 'Proc'
+OPTION (RECOMPILE);
