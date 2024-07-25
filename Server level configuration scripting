@@ -1,0 +1,161 @@
+-- Script out server-level configurations for migration
+
+-- Capture general server properties
+PRINT '-- General server properties'
+PRINT '/*'
+PRINT 'ProductVersion: ' + CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(128))
+PRINT 'ProductLevel: ' + CAST(SERVERPROPERTY('ProductLevel') AS NVARCHAR(128))
+PRINT 'Edition: ' + CAST(SERVERPROPERTY('Edition') AS NVARCHAR(128))
+PRINT 'EngineEdition: ' + CAST(SERVERPROPERTY('EngineEdition') AS NVARCHAR(128))
+PRINT 'MachineName: ' + CAST(SERVERPROPERTY('MachineName') AS NVARCHAR(128))
+PRINT 'IsClustered: ' + CAST(SERVERPROPERTY('IsClustered') AS NVARCHAR(128))
+PRINT 'IsHadrEnabled: ' + CAST(SERVERPROPERTY('IsHadrEnabled') AS NVARCHAR(128))
+PRINT 'ComputerNamePhysicalNetBIOS: ' + CAST(SERVERPROPERTY('ComputerNamePhysicalNetBIOS') AS NVARCHAR(128))
+PRINT 'Collation: ' + CAST(SERVERPROPERTY('Collation') AS NVARCHAR(128))
+PRINT '*/'
+
+-- Server configuration options
+PRINT '-- Server configuration options'
+SELECT 'EXEC sp_configure @configname = N''' + name + ''', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+ORDER BY name;
+
+-- Affinity mask settings
+PRINT '-- Affinity mask settings'
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE;
+SELECT 'EXEC sp_configure @configname = N''affinity mask'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'affinity mask';
+SELECT 'EXEC sp_configure @configname = N''affinity64 mask'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'affinity64 mask';
+
+-- Max degree of parallelism (MAXDOP)
+PRINT '-- Max degree of parallelism (MAXDOP)'
+SELECT 'EXEC sp_configure @configname = N''max degree of parallelism'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'max degree of parallelism';
+
+-- Memory settings
+PRINT '-- Memory settings'
+SELECT 'EXEC sp_configure @configname = N''max server memory (MB)'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'max server memory (MB)';
+SELECT 'EXEC sp_configure @configname = N''min server memory (MB)'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'min server memory (MB)';
+
+-- Cost threshold for parallelism
+PRINT '-- Cost threshold for parallelism'
+SELECT 'EXEC sp_configure @configname = N''cost threshold for parallelism'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'cost threshold for parallelism';
+
+-- TempDB configuration
+PRINT '-- TempDB configuration'
+SELECT 'ALTER DATABASE [tempdb] MODIFY FILE (NAME = [' + name + '], SIZE = ' + CAST(size AS NVARCHAR) + 'KB, MAXSIZE = ' + CASE WHEN max_size = -1 THEN 'UNLIMITED' ELSE CAST(max_size AS NVARCHAR) END + ', FILEGROWTH = ' + CASE WHEN is_percent_growth = 1 THEN CAST(growth AS NVARCHAR) + '%' ELSE CAST(growth AS NVARCHAR) + 'KB' END + ');' AS TempDBConfig
+FROM sys.master_files
+WHERE database_id = DB_ID('tempdb');
+
+-- Trace flags
+PRINT '-- Trace flags';
+DECLARE @traceflags TABLE (TraceFlag INT, GlobalStatus BIT, SessionStatus BIT, StartUp BIT);
+INSERT INTO @traceflags (TraceFlag, GlobalStatus, SessionStatus, StartUp)
+EXEC ('DBCC TRACESTATUS(-1) WITH NO_INFOMSGS');
+DECLARE @traceFlagScript NVARCHAR(MAX) = '';
+SELECT @traceFlagScript = @traceFlagScript + 'DBCC TRACEON (' + CAST(TraceFlag AS VARCHAR) + ', -1);' + CHAR(13)
+FROM @traceflags
+WHERE GlobalStatus = 1 OR StartUp = 1;
+PRINT @traceFlagScript;
+
+-- Database Mail settings
+PRINT '-- Database Mail settings'
+EXEC msdb.dbo.sysmail_help_configure_sp;
+
+-- Linked Servers
+PRINT '-- Linked Servers'
+SELECT 'EXEC sp_addlinkedserver @server = N''' + name + ''', @srvproduct = N''' + product + ''', @provider = N''' + provider + ''', @datasrc = N''' + data_source + ''';' AS LinkedServerScript
+FROM sys.servers
+WHERE is_linked = 1;
+
+-- SQL Server Agent properties
+PRINT '-- SQL Server Agent properties'
+EXEC msdb.dbo.sp_get_sqlagent_properties;
+
+-- Extended Events sessions
+PRINT '-- Extended Events sessions'
+SELECT 'ALTER EVENT SESSION [' + name + '] ON SERVER STATE = ' + CASE WHEN startup_state = 1 THEN 'START' ELSE 'STOP' END + ';' AS XESessionScript
+FROM sys.server_event_sessions;
+
+
+-- Backup compression default
+PRINT '-- Backup compression default'
+SELECT 'EXEC sp_configure @configname = N''backup compression default'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'backup compression default';
+
+-- Default backup media retention
+PRINT '-- Default backup media retention'
+SELECT 'EXEC sp_configure @configname = N''default backup media retention'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'default backup media retention';
+
+-- Network packet size
+PRINT '-- Network packet size'
+SELECT 'EXEC sp_configure @configname = N''network packet size (B)'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'network packet size (B)';
+
+-- Remote login timeout
+PRINT '-- Remote login timeout'
+SELECT 'EXEC sp_configure @configname = N''remote login timeout (s)'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'remote login timeout (s)';
+
+-- Remote query timeout
+PRINT '-- Remote query timeout'
+SELECT 'EXEC sp_configure @configname = N''remote query timeout (s)'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'remote query timeout (s)';
+
+-- Optimize for ad hoc workloads
+PRINT '-- Optimize for ad hoc workloads'
+SELECT 'EXEC sp_configure @configname = N''optimize for ad hoc workloads'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'optimize for ad hoc workloads';
+
+-- Lightweight pooling
+PRINT '-- Lightweight pooling'
+SELECT 'EXEC sp_configure @configname = N''lightweight pooling'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'lightweight pooling';
+
+-- Max text repl size
+PRINT '-- Max text repl size'
+SELECT 'EXEC sp_configure @configname = N''max text repl size (B)'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'max text repl size (B)';
+
+-- OLE Automation Procedures
+PRINT '-- OLE Automation Procedures'
+SELECT 'EXEC sp_configure @configname = N''Ole Automation Procedures'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'Ole Automation Procedures';
+
+-- CLR Integration
+PRINT '-- CLR Integration'
+SELECT 'EXEC sp_configure @configname = N''clr enabled'', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' AS ConfigScript
+FROM sys.configurations
+WHERE name = 'clr enabled';
+
+-- Dynamic SQL for additional configurations
+PRINT '-- Additional configurations'
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql += 'EXEC sp_configure @configname = N''' + name + ''', @configvalue = ' + CAST(value AS NVARCHAR) + '; RECONFIGURE;' + CHAR(13)
+FROM sys.configurations
+WHERE name IN ('clr enabled', 'lightweight pooling', 'backup compression default', 'max degree of parallelism', 'max server memory (MB)', 'min server memory (MB)', 'cost threshold for parallelism', 'network packet size (B)', 'remote login timeout (s)', 'remote query timeout (s)', 'optimize for ad hoc workloads', 'Ole Automation Procedures', 'max text repl size (B)');
+PRINT @sql;
+
+-- Add section headers for easy reading
+PRINT '-- End of Script'
