@@ -1,0 +1,54 @@
+ 
+--Check the Availability Group State: Ensure that the availability group is online and functioning correctly.
+SELECT ag.name, ags.database_state_desc
+FROM sys.availability_groups AS ag
+JOIN sys.dm_hadr_availability_group_states AS ags
+ON ag.group_id = ags.group_id;
+
+--Verify the Local Replica State: Ensure that the local replica is the primary replica.
+SELECT replica_server_name, role_desc
+FROM sys.dm_hadr_availability_replica_states
+WHERE is_local = 1;
+
+--Force Remove Replica (if necessary): On the primary replica:
+ALTER AVAILABILITY GROUP [AG-Name] REMOVE REPLICA ON 'ReplicaNameHere';
+--On the secondary replica (if you need to manually remove it):
+ALTER AVAILABILITY GROUP [AG-Name] OFFLINE;
+
+
+FOr DATABASE
+--Check the Current State of the Database: Verify the current state of the database in the availability group.
+SELECT db.name, dbs.synchronization_state_desc
+FROM sys.databases AS db
+JOIN sys.dm_hadr_database_replica_states AS dbs
+ON db.database_id = dbs.database_id;
+--Remove the Database from the Availability Group: Ensure that the database is removed from the availability group on the primary replica.
+ALTER DATABASE [YourDatabaseName] SET HADR OFF;
+
+Clean Up Metadata:
+On the primary replica:
+
+ALTER AVAILABILITY GROUP [YourAGName] REMOVE DATABASE [YourDatabaseName];
+
+
+Force Cleanup (if necessary):
+If the database still appears, you can use the following steps to force the cleanup.
+
+Remove the database from the availability group on the secondary replica:
+
+ALTER DATABASE [YourDatabaseName] SET HADR OFF;
+
+Remove the database from the availability group on the primary replica:
+ALTER DATABASE [YourDatabaseName] SET HADR OFF;
+ALTER AVAILABILITY GROUP [YourAGName] REMOVE DATABASE [YourDatabaseName];
+
+--Verify the Removal: Verify that the database has been successfully removed from the availability group.
+SELECT db.name, agd.database_state_desc
+FROM sys.databases AS db
+LEFT JOIN sys.dm_hadr_database_replica_states AS agd
+ON db.database_id = agd.database_id;
+
+
+-- Remove from Secondary Replica (if still present): If the database still shows up in the secondary replica, ensure it is removed from there as well.
+USE [master];
+DROP DATABASE [YourDatabaseName];
