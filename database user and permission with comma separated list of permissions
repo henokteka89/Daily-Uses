@@ -1,0 +1,33 @@
+SELECT 
+    u.name AS 'User',
+    STRING_AGG(dp.permission_name, ', ') AS 'Permissions'
+FROM 
+    sys.database_principals AS u
+INNER JOIN 
+    sys.database_permissions AS dp ON u.principal_id = dp.grantee_principal_id
+WHERE 
+    u.type_desc NOT IN ('DATABASE_ROLE', 'APPLICATION_ROLE', 'SERVER_ROLE')
+GROUP BY 
+    u.name
+ORDER BY 
+    u.name;
+
+---------
+---------
+---for 2016 and early versions
+SELECT 
+    u.name AS [User],
+    STUFF((
+        SELECT ', ' + dp.permission_name 
+        FROM sys.database_principals AS u2
+        INNER JOIN sys.database_permissions AS dp ON u2.principal_id = dp.grantee_principal_id
+        WHERE u2.name = u.name
+        FOR XML PATH('')), 1, 2, '') AS [Permissions]
+FROM 
+    sys.database_principals AS u
+WHERE 
+    u.type_desc NOT IN ('DATABASE_ROLE', 'APPLICATION_ROLE', 'SERVER_ROLE')
+GROUP BY 
+    u.name
+ORDER BY 
+    u.name;
