@@ -21,3 +21,38 @@ CROSS APPLY
 WHERE 
     r.database_id = DB_ID('abc')  -- Replace 'abc' with your database name
     AND t.text LIKE '%INSERT%';   -- Filter by the specific INSERT statement if known
+--check if single session like spid 451 is running in parallel
+
+DECLARE @SPID INT = 451;  -- Replace with the SPID you're investigating
+
+SELECT 
+    r.session_id AS SPID,
+    r.request_id,
+    r.command,
+    r.database_id,
+    r.status,
+    r.start_time,
+    t.task_address,
+    t.exec_context_id,
+    t.request_id,
+    t.worker_address,
+    w.scheduler_id,
+    w.is_preemptive,
+    w.state AS WorkerState,
+    t.pending_io_count,
+    t.pending_io_byte_count,
+    t.context_switches_count,
+    r.sql_handle,
+    st.text AS QueryText
+FROM 
+    sys.dm_exec_requests r
+JOIN 
+    sys.dm_os_tasks t ON r.session_id = t.session_id AND r.request_id = t.request_id
+JOIN 
+    sys.dm_os_workers w ON t.worker_address = w.worker_address
+CROSS APPLY 
+    sys.dm_exec_sql_text(r.sql_handle) AS st
+WHERE 
+    r.session_id = @SPID
+ORDER BY 
+    t.exec_context_id;
