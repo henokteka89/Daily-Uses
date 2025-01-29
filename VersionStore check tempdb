@@ -1,0 +1,41 @@
+From Haripriya
+
+Here are the 4 things I’m checking below:
+Number of rows in version store using dmv - sys.dm_tran_version_store.
+Space consumed in TempDB by version store of each user database.
+File sizes of TempDB
+Check transactions currently using version store
+/*DISPLAY VERSIONED ROWS IN VERSION STORE
+DO NOT RUN ON PROD DUE TO HUGE NUMBER OF RECORDS*/
+SELECT COUNT(*) AS NumberOfVersionedRows 
+FROM sys.dm_tran_version_store
+
+/*SPACE CONSUMED IN TEMPDB, BY VERSION STORE OF EACH DATABASE*/
+SELECT DB_NAME(database_id) AS 'Database Name'
+	,reserved_space_kb  AS 'Space(KB) used in tempdb for version store'
+FROM sys.dm_tran_version_store_space_usage
+WHERE reserved_space_kb > 0
+ORDER BY 1;
+
+/*TEMPDB TOTAL FILES SIZE*/
+USE tempdb;
+SELECT 
+    DB_NAME() AS DatabaseName,
+    SUM(CASE WHEN type_desc = 'ROWS' THEN size ELSE 0 END) / 128.0 AS TotalDataFilesSizeInMB,
+	SUM(CASE WHEN type_desc = 'ROWS' THEN FILEPROPERTY(name, 'SpaceUsed') ELSE 0 END)/128.0 AS TotalDataSpaceUsedInMB,
+	SUM(CASE WHEN type_desc = 'ROWS' THEN size  - FILEPROPERTY(name, 'SpaceUsed') ELSE 0 END)/128.0 AS TotalFreeSpaceInMB,
+    SUM(CASE WHEN type_desc = 'LOG' THEN size ELSE 0 END) / 128.0 AS TotalLogFileSizeInMB,
+	SUM(CASE WHEN type_desc = 'LOG' THEN FILEPROPERTY(name, 'SpaceUsed') ELSE 0 END)/128.0 AS TotalLogSpaceUsedInMB
+FROM sys.database_files;
+
+/*FIND TRANSACTIONS USING VERSION STORE
+
+https://thesqldude.com/2012/05/15/monitoring-tempdb-space-usage-and-scripts-for-finding-queries-which-are-using-excessive-tempdb-space/
+
+*/
+SELECT a.session_id, d.name, a.elapsed_time_seconds/60.00 AS elapsed_time_mins,
+b.open_tran, b.status,b.program_name,  a.transaction_id, a.transaction_sequence_num
+FROM sys.dm_tran_active_snapshot_database_transactions a
+join sys.sysprocesses b on a.session_id = b.spid
+join sys.databases d on b.dbid=d.database_id
+ORDER BY elapsed_time_seconds DESC
