@@ -1,0 +1,13 @@
+DECLARE @SearchString NVARCHAR(255) = 'university of -'
+DECLARE @SQL NVARCHAR(MAX) = ''
+
+SELECT @SQL = @SQL + 
+    'IF EXISTS (SELECT 1 FROM [' + TABLE_SCHEMA + '].[' + TABLE_NAME + '] WHERE [' + COLUMN_NAME + '] LIKE ''%' + @SearchString + '%'') 
+    PRINT ''Match found in: ' + TABLE_SCHEMA + '.' + TABLE_NAME + ' -> ' + COLUMN_NAME + ''';'
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE DATA_TYPE IN ('varchar', 'nvarchar', 'text', 'ntext')
+
+IF @SQL <> ''
+    EXEC sp_executesql @SQL
+ELSE
+    PRINT 'No text columns found in the database.'
