@@ -1,0 +1,39 @@
+USE [YourDatabaseName]; -- Replace with your actual database name
+GO
+
+WITH IndexStats AS (
+    SELECT  
+        db_name(s.database_id) AS DatabaseName,
+        sc.name AS SchemaName,
+        o.name AS TableName,
+        i.name AS IndexName,
+        i.type_desc AS IndexType,
+        s.partition_number,
+        s.avg_fragmentation_in_percent AS FragmentationPercent,
+        s.page_count,
+        i.index_id
+    FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED') s
+    JOIN sys.objects o ON s.object_id = o.object_id
+    JOIN sys.schemas sc ON o.schema_id = sc.schema_id
+    JOIN sys.indexes i ON s.object_id = i.object_id AND s.index_id = i.index_id
+    WHERE i.type_desc IN ('CLUSTERED', 'NONCLUSTERED') -- Only include actual indexes
+)
+
+SELECT DISTINCT
+    DatabaseName,
+    SchemaName,
+    TableName,
+    IndexName,
+    IndexType,
+    MAX(FragmentationPercent) AS max_fragmentation_pct, -- Highest fragmentation found
+    AVG(FragmentationPercent) AS avg_fragmentation_pct, -- Average fragmentation across partitions
+    SUM(page_count) AS page_count,
+    COUNT(index_id) AS number_of_indexes,
+    
+    -- Generate SQL commands for maintenance
+    'ALTER INDEX ALL ON [' + SchemaName + '].[' + TableName + '] REORGANIZE;' AS SQL_Reorg,
+    'ALTER INDEX ALL ON [' + SchemaName + '].[' + TableName + '] REBUILD WITH (ONLINE = ON, MAXDOP = 1);' AS SQL_Rebuild,
+    'UPDATE STATISTICS [' + SchemaName + '].[' + TableName + '] WITH FULLSCAN;' AS SQL_UpdateStats
+
+FROM IndexStats
+GROUP BY DatabaseName, SchemaName, TableName, IndexName, IndexType;
