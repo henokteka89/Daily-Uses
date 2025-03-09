@@ -1,0 +1,46 @@
+this shows current cpu 
+(Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples.CookedValue
+
+if you want to insert data into table
+
+CREATE TABLE SQLServer_CPU_Usage (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    EventTime DATETIME DEFAULT GETDATE(),
+    SQL_CPU FLOAT,
+    System_CPU FLOAT
+);
+
+Save the below command as a .ps1 file and execute using SQL JOB (CMD)
+exec xp_cmdshell 'powershell.exe -ExecutionPolicy Unrestricted -file B:\CPUUsageScript.ps1' 
+
+
+# SQL Server Connection Details
+$SQLServer = "localhost"  # Replace with your server name
+$Database = "admin"           # Database name
+$Table = "SQLServer_CPU_Usage" # Table name
+
+# Get Total System CPU Usage (correctly extract value)
+$SystemCPU = (Get-Counter '\Processor(_Total)\% Processor Time').CounterSamples[0].CookedValue
+
+# Round the value to 2 decimal places
+$SystemCPU = [math]::Round([double]$SystemCPU, 2)
+
+# Construct SQL query to insert the CPU value into the table
+$SQLQuery = "INSERT INTO $Table (EventTime, System_CPU) VALUES (GETDATE(), $SystemCPU)"
+
+# Establish SQL Connection to the 'admin' database
+$ConnectionString = "Server=$SQLServer;Database=$Database;Integrated Security=True;"
+$Connection = New-Object System.Data.SqlClient.SqlConnection
+$Connection.ConnectionString = $ConnectionString
+$Connection.Open()
+
+# Execute the SQL query
+$Command = $Connection.CreateCommand()
+$Command.CommandText = $SQLQuery
+$Command.ExecuteNonQuery()
+
+# Close the connection
+$Connection.Close()
+
+# Output confirmation
+Write-Output "Inserted System CPU: $SystemCPU% into $Table at $(Get-Date)"
