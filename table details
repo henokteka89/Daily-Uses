@@ -1,0 +1,41 @@
+WITH TableInfo AS (
+    SELECT 
+        t.name AS TableName,
+        SUM(a.total_pages) * 8 / 1024 AS SizeInMB,
+        SUM(a.used_pages) * 8 / 1024 AS UsedSizeInMB,
+        SUM(a.data_pages) * 8 / 1024 AS DataSizeInMB,
+        p.rows AS TotalRows
+    FROM sys.tables t
+    INNER JOIN sys.indexes i ON t.object_id = i.object_id
+    INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
+    INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
+    WHERE i.index_id <= 1 -- 0 = Heap, 1 = Clustered Index
+    GROUP BY t.name, p.rows
+)
+SELECT 
+    ti.TableName,
+    ti.SizeInMB,
+    ti.UsedSizeInMB,
+    ti.DataSizeInMB,
+    ti.TotalRows,
+    ISNULL(pk.ConstraintName, 'No PK') AS PrimaryKey,
+    STRING_AGG(c.name, ', ') AS ColumnList,
+    COUNT(c.name) AS ColumnCount,
+    CASE 
+        WHEN ti.SizeInMB > 1000 THEN 'Large Table'
+        WHEN ti.TotalRows > 1000000 THEN 'High Row Count'
+        ELSE 'Normal' 
+    END AS TableCategory
+FROM TableInfo ti
+LEFT JOIN (
+    SELECT 
+        kc.table_name,
+        kc.constraint_name AS ConstraintName
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kc 
+        ON tc.constraint_name = kc.constraint_name
+    WHERE tc.constraint_type = 'PRIMARY KEY'
+) pk ON ti.TableName = pk.table_name
+JOIN sys.columns c ON OBJECT_ID(ti.TableName) = c.object_id
+GROUP BY ti.TableName, ti.SizeInMB, ti.UsedSizeInMB, ti.DataSizeInMB, ti.TotalRows, pk.ConstraintName
+ORDER BY ti.SizeInMB DESC;
