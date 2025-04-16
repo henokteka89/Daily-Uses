@@ -1,0 +1,72 @@
+Create database Medical
+  CREATE TABLE AdmissionsCore (
+    PatientID UNIQUEIDENTIFIER,
+    AdmissionID INT,
+    AdmissionStartDate DATETIME,
+    AdmissionEndDate DATETIME
+);
+
+-- For CSV 
+BULK INSERT YourTableName
+FROM 'C:\Users\abcd\Downloads\100000-Patients\AdmissionsCorePopulatedTable.csv'
+WITH (
+    FORMAT = 'CSV', -- or use FIELDTERMINATOR & ROWTERMINATOR for older versions
+    FIRSTROW = 2,   -- Skip header row, if needed
+    FIELDTERMINATOR = ',', 
+    ROWTERMINATOR = '\n',
+    TABLOCK
+);
+
+ CREATE TABLE PatientLabs (
+    PatientID UNIQUEIDENTIFIER,
+    AdmissionID INT,
+    LabName NVARCHAR(255),
+    LabValue FLOAT,
+    LabUnits NVARCHAR(50),
+    LabDateTime DATETIME2(7)
+);
+--truncate table PatientLabs
+BULK INSERT PatientLabs
+FROM 'C:\Users\kabda\Downloads\100000-Patients\LabsCorePopulatedTable.txt'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = '\t',
+    ROWTERMINATOR = '\n'
+    --,TABLOCK
+);
+
+
+CREATE TABLE PatientInfo (
+    PatientID UNIQUEIDENTIFIER,
+    PatientGender NVARCHAR(10),
+    PatientDateOfBirth DATETIME2(3),
+    PatientRace NVARCHAR(50),
+    PatientMaritalStatus NVARCHAR(20),
+    PatientLanguage NVARCHAR(50),
+    PatientPopulationPercentageBelowPoverty FLOAT
+);
+
+BULK INSERT PatientInfo
+FROM 'C:\Users\abcd\Downloads\100000-Patients\PatientCorePopulatedTable.txt'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = '\t',
+    ROWTERMINATOR = '\n',
+    TABLOCK
+);
+
+CREATE TABLE AdmissionDiagnosis (
+    PatientID UNIQUEIDENTIFIER,
+    AdmissionID INT,
+    PrimaryDiagnosisCode NVARCHAR(20),
+    PrimaryDiagnosisDescription NVARCHAR(255)
+);
+
+BULK INSERT AdmissionDiagnosis
+FROM 'C:\Users\abcd\Downloads\100000-Patients\AdmissionsDiagnosesCorePopulatedTable.txt'
+WITH (
+    FIRSTROW = 2,
+    FIELDTERMINATOR = '\t',
+    ROWTERMINATOR = '\n',
+    TABLOCK
+);
