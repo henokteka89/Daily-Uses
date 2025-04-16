@@ -1,0 +1,32 @@
+DECLARE @sql NVARCHAR(MAX) = N'';
+ 
+SELECT @sql += '
+USE [' + name + '];
+SELECT 
+    ''' + name + ''' AS DatabaseName,
+    s.name AS SchemaName,
+    t.name AS TableName,
+    p.rows AS [RowCount]
+FROM 
+    sys.tables AS t
+JOIN 
+    sys.schemas AS s ON t.schema_id = s.schema_id
+LEFT JOIN 
+    sys.dm_db_index_usage_stats AS ius 
+    ON t.object_id = ius.object_id AND ius.database_id = DB_ID()
+LEFT JOIN 
+    sys.partitions AS p 
+    ON t.object_id = p.object_id AND p.index_id IN (0,1)
+WHERE 
+    ISNULL(ius.user_seeks, 0) = 0
+    AND ISNULL(ius.user_scans, 0) = 0
+    AND ISNULL(ius.user_lookups, 0) = 0
+    AND ISNULL(ius.user_updates, 0) = 0
+GROUP BY 
+    s.name, t.name, p.rows;
+'
+FROM sys.databases
+WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb');
+
+-- Run the collected SQL
+EXEC sp_executesql @sql;
