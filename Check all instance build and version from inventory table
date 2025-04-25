@@ -1,0 +1,72 @@
+# Define latest known versions and CU levels (update as needed)
+$latestVersions = @{
+    "2016" = 21  # Replace with latest CU for 2016
+    "2017" = 31
+    "2019" = 22
+    "2022" = 11
+}
+
+# Step 1: Get server list from Servername
+$Servername = "Servername"
+$serverListQuery = "SELECT ServerName FROM YourDatabase.dbo.YourServerListTable"
+$serverList = Invoke-Sqlcmd -ServerInstance $Servername -Query $serverListQuery
+
+# Step 2: Define helper to get version details
+function Get-SQLVersionInfo {
+    param ($server)
+
+    try {
+        $versionInfo = Invoke-Sqlcmd -ServerInstance $server -Query "SELECT 
+            SERVERPROPERTY('ProductVersion') AS ProductVersion,
+            SERVERPROPERTY('ProductLevel') AS ProductLevel,
+            SERVERPROPERTY('Edition') AS Edition"
+
+        if ($versionInfo) {
+            $versionParts = $versionInfo.ProductVersion -split "\."
+            $majorVersion = switch ($versionParts[0]) {
+                13 { "2016" }
+                14 { "2017" }
+                15 { "2019" }
+                16 { "2022" }
+                default { "Unknown" }
+            }
+
+            $cu = [int]$versionParts[2]
+            $latestCU = $latestVersions[$majorVersion]
+
+            $behindStatus = if ($majorVersion -eq "Unknown") {
+                "Unknown Version"
+            } elseif ($latestCU -gt $cu) {
+                "CU Behind by $($latestCU - $cu)"
+            } elseif ($latestVersions.Keys | Where-Object { $_ -gt $majorVersion }) {
+                "Version Behind ($majorVersion)"
+            } else {
+                "Up-to-date"
+            }
+
+            return [PSCustomObject]@{
+                Server        = $server
+                Version       = $majorVersion
+                Edition       = $versionInfo.Edition
+                CU_Level      = "CU$cu"
+                BehindStatus  = $behindStatus
+            }
+        }
+    } catch {
+        return [PSCustomObject]@{
+            Server       = $server
+            Version      = "N/A"
+            Edition      = "N/A"
+            CU_Level     = "N/A"
+            BehindStatus = "Connection Failed"
+        }
+    }
+}
+
+# Step 3: Loop through servers and collect info
+$results = foreach ($row in $serverList) {
+    Get-SQLVersionInfo -server $row.ServerName
+}
+
+# Step 4: Show results in grid
+$results | Out-GridView -Title "SQL Server Build and CU Report"
