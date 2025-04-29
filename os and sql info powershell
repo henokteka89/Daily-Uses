@@ -1,0 +1,47 @@
+# Make sure the required modules are available
+#Import-Module dbatools
+#Import-Module ImportExcel
+
+# Define local computer name
+$computerName = $env:COMPUTERNAME
+
+# Get system and SQL info for the local machine
+$os = Get-DbaOperatingSystem -ComputerName $computerName
+$sql = Get-DbaProductKey -ComputerName $computerName
+
+# Output Excel file path
+$excelFile = 'C:\temp\VersionInfo.xlsx'
+
+# Properties to export
+$osProps = 'ComputerName','Architecture','Version','Build','OSVersion','SPVersion','InstallDate','LastBootTime','ActivePowerPlan'
+$sqlProps = 'ComputerName','InstanceName','SqlInstance','Version','Edition'
+
+# OS worksheet export settings
+$osExcel = @{
+	Path = $excelFile
+	WorksheetName = 'OSVersions'
+	AutoSize = $true
+	TableName = 'OSVersion'
+	IncludePivotTable = $true
+	PivotRows = 'OSVersion'
+	PivotData = @{OSVersion='Count'}
+	IncludePivotChart = $true
+	ChartType = 'ColumnClustered'
+}
+
+# SQL worksheet export settings
+$sqlExcel = @{
+	Path = $excelFile
+	WorksheetName = 'SQLVersions'
+	AutoSize = $true
+	TableName = 'SQLVersions'
+	IncludePivotTable = $true
+	PivotRows = 'Version'
+	PivotData = @{Version='Count'}
+	IncludePivotChart = $true
+	ChartType = 'ColumnClustered'
+}
+
+# Export to Excel
+$os | Select-Object $osProps | Export-Excel @osExcel
+$sql | Select-Object $sqlProps | Export-Excel @sqlExcel
