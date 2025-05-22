@@ -1,0 +1,9 @@
+ 
+8649	--Force parallel plan regardless of cost
+8687 == discourages parallel plan
+8687, 8780, 8788, 2301 --spend more time finding optimal plan
+4136 --option (optimize for unknown)
+4137 -- uses lowest selectivity with multiple and predicates
+4138 -- turns off row goals with TOP / FAST <N> / IN /EXISTS
+
+E.G  OPTION (QUERYTRACEON 8649)
