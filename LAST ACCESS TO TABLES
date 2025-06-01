@@ -1,5 +1,5 @@
-/* Queries and Modifications */
---RUN PER DATABASE
+/* Queries and Modifications + Table Size */
+--rUN PER DB
 ;WITH UsageStats (object_id, Index_ID, Seek, Scan, LookUp, [Update]) AS (
     SELECT
         T.object_id, Index_Id,
@@ -14,7 +14,7 @@ ReferenceDates (object_id, AccessDate, Operation) AS (
     (AccessDate FOR Operation IN ([Seek], [Scan], [LookUp], [Update])) AS UP
 ),
 LastAccess (object_id, LastDate) AS (
-    SELECT object_id, MAX(AccessDate) FROM ReferenceDates
+    SELECT object_id, MAX(AccessDate) AS LastDate FROM ReferenceDates
     GROUP BY object_id
 ),
 LastOperations (object_id, LastDate, Operations) AS (
@@ -23,13 +23,24 @@ LastOperations (object_id, LastDate, Operations) AS (
          WHERE LA.object_id = R.object_id AND LA.LastDate = R.AccessDate
          FOR XML AUTO) AS Operations
     FROM LastAccess AS LA
+),
+TableSizeMB AS (
+    SELECT 
+        object_id,
+        SUM(reserved_page_count) * 8.0 / 1024 AS SizeMB
+    FROM sys.dm_db_partition_stats
+    GROUP BY object_id
 )
 
 SELECT
     T.name AS TableName,
-    LastDate AS LastAccessDate,
-    REPLACE(REPLACE(Operations, '"/>', ','), '<R Operation="', '') AS LastOperations
+    -- Format LastAccessDate as string, fallback to 'Never Accessed'
+    COALESCE(CONVERT(VARCHAR(19), LO.LastDate, 120), 'Never Accessed') AS LastAccessDate,
+    ISNULL(REPLACE(REPLACE(LO.Operations, '"/>', ','), '<R Operation="', ''), 'No Activity') AS LastOperations,
+    CONVERT(DECIMAL (10,2), ISNULL(SIZE.SizeMB, 0)) AS TableSizeMB
 FROM sys.tables AS T
-LEFT OUTER JOIN LastOperations AS LO ON T.object_id = LO.object_id
-ORDER BY LastAccessDate DESC;
+LEFT JOIN LastOperations AS LO ON T.object_id = LO.object_id
+LEFT JOIN TableSizeMB AS SIZE ON T.object_id = SIZE.object_id
+ORDER BY 
+    LO.LastDate DESC OFFSET 0 ROWS;
 GO
