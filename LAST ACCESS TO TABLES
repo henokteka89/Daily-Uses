@@ -1,0 +1,35 @@
+/* Queries and Modifications */
+--RUN PER DATABASE
+;WITH UsageStats (object_id, Index_ID, Seek, Scan, LookUp, [Update]) AS (
+    SELECT
+        T.object_id, Index_Id,
+        last_user_seek, last_user_scan, last_user_lookup, last_user_update
+    FROM sys.dm_db_index_usage_stats AS I
+    INNER JOIN sys.tables AS T ON I.object_id = T.object_id
+    WHERE database_id = DB_ID()
+),
+ReferenceDates (object_id, AccessDate, Operation) AS (
+    SELECT object_id, AccessDate, Operation FROM UsageStats
+    UNPIVOT
+    (AccessDate FOR Operation IN ([Seek], [Scan], [LookUp], [Update])) AS UP
+),
+LastAccess (object_id, LastDate) AS (
+    SELECT object_id, MAX(AccessDate) FROM ReferenceDates
+    GROUP BY object_id
+),
+LastOperations (object_id, LastDate, Operations) AS (
+    SELECT LA.*,
+        (SELECT DISTINCT Operation FROM ReferenceDates AS R
+         WHERE LA.object_id = R.object_id AND LA.LastDate = R.AccessDate
+         FOR XML AUTO) AS Operations
+    FROM LastAccess AS LA
+)
+
+SELECT
+    T.name AS TableName,
+    LastDate AS LastAccessDate,
+    REPLACE(REPLACE(Operations, '"/>', ','), '<R Operation="', '') AS LastOperations
+FROM sys.tables AS T
+LEFT OUTER JOIN LastOperations AS LO ON T.object_id = LO.object_id
+ORDER BY LastAccessDate DESC;
+GO
