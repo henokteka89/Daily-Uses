@@ -1,5 +1,5 @@
-/* Queries and Modifications + Table Size */
---rUN PER DB
+/* Table Usage Info with Last Access, Size, and Row Count */
+--Per database
 ;WITH UsageStats (object_id, Index_ID, Seek, Scan, LookUp, [Update]) AS (
     SELECT
         T.object_id, Index_Id,
@@ -24,23 +24,31 @@ LastOperations (object_id, LastDate, Operations) AS (
          FOR XML AUTO) AS Operations
     FROM LastAccess AS LA
 ),
-TableSizeMB AS (
+TableSizeAndRowCount AS (
     SELECT 
         object_id,
-        SUM(reserved_page_count) * 8.0 / 1024 AS SizeMB
+        SUM(reserved_page_count) * 8.0 / 1024 AS SizeMB,
+        SUM(CASE WHEN index_id IN (0,1) THEN row_count ELSE 0 END) AS [RowCount]
     FROM sys.dm_db_partition_stats
     GROUP BY object_id
 )
 
 SELECT
     T.name AS TableName,
-    -- Format LastAccessDate as string, fallback to 'Never Accessed'
     COALESCE(CONVERT(VARCHAR(19), LO.LastDate, 120), 'Never Accessed') AS LastAccessDate,
     ISNULL(REPLACE(REPLACE(LO.Operations, '"/>', ','), '<R Operation="', ''), 'No Activity') AS LastOperations,
-    CONVERT(DECIMAL (10,2), ISNULL(SIZE.SizeMB, 0)) AS TableSizeMB
+    ISNULL(SR.SizeMB, 0) AS TableSizeMB,
+    ISNULL(SR.[RowCount], 0) AS TotalRows
 FROM sys.tables AS T
 LEFT JOIN LastOperations AS LO ON T.object_id = LO.object_id
-LEFT JOIN TableSizeMB AS SIZE ON T.object_id = SIZE.object_id
-ORDER BY 
-    LO.LastDate DESC OFFSET 0 ROWS;
+LEFT JOIN TableSizeAndRowCount AS SR ON T.object_id = SR.object_id
+
+-- Uncomment the following line to show only tables never accessed
+ WHERE LO.LastDate IS NULL
+
+-- Uncomment the following line to order by size instead of last access date when filtering by never accessed
+ ORDER BY SR.SizeMB DESC
+
+-- Default order by last access date descending
+--ORDER BY LO.LastDate DESC;
 GO
