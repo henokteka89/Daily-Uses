@@ -1,0 +1,13 @@
+; with cte as ( SELECT
+     T1.Name As DatabaseName
+    ,Coalesce(Convert(varchar(12), MAX(T2.Backup_Finish_Date), 101),'Not Yet Taken') As LastBackUpTaken
+    ,Coalesce(Convert(varchar(12), MAX(T2.User_Name), 101), 'NA') As UserName
+FROM
+    sys.sysdatabases T1 
+LEFT OUTER JOIN msdb.dbo.backupset T2 ON T2.Database_Name = T1.Name
+WHERE T1.Name NOT IN ('tempdb')
+GROUP BY T1.Name
+     )
+
+    select * from cte 
+    where LastBackUpTaken = 'Not Yet Taken'
