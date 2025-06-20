@@ -1,0 +1,49 @@
+
+
+-- Drop the Extended Event session if it exists
+IF EXISTS (
+    SELECT 1
+    FROM sys.server_event_sessions
+    WHERE name = 'CaptureRPCEventRecord'
+)
+BEGIN
+    DROP EVENT SESSION [CaptureRPCEventRecord] ON SERVER;
+END
+
+-- Create the Extended Event session
+CREATE EVENT SESSION [CaptureRPCEventRecord] ON SERVER
+ADD EVENT sqlserver.rpc_completed(
+    ACTION(sqlserver.database_id, sqlserver.sql_text, sqlserver.username)
+    WHERE ([object_name] LIKE 'usp_Get_Physical_Status1D' AND cpu_time > 5000000) -- with high cputime
+)
+ADD TARGET package0.event_file(SET FILENAME=N'C:\Temp\CaptureRPCEventRecord.xel')
+WITH (
+    MAX_MEMORY=4096 KB,
+    EVENT_RETENTION_MODE=ALLOW_SINGLE_EVENT_LOSS,
+    MAX_DISPATCH_LATENCY=30 SECONDS,
+    MAX_EVENT_SIZE=0 KB,
+    MEMORY_PARTITION_MODE=NONE,
+    TRACK_CAUSALITY=OFF,
+    STARTUP_STATE=OFF
+)
+GO
+
+-- Start the Extended Event session
+ALTER EVENT SESSION [CaptureRPCEventRecord] ON SERVER STATE = START;
+-- Stop the session
+ALTER EVENT SESSION [CaptureRPCEventRecord] ON SERVER STATE = STOP;
+
+-- Insert into admin.dbo.xeventStatement (statement)
+--SELECT * FROM admin.dbo.xeventStatement WHERE statement LIKE '%xxx%'
+INSERT INTO admin.dbo.xeventStatement (statement)
+
+-- Extract from the event
+SELECT 
+    x.event_data.value('(event/data[@name="statement"]/value)[1]', 'nvarchar(max)') AS STATEMENT
+FROM 
+    sys.fn_xe_file_target_read_file('C:\Temp\CaptureRPCEventRecord*.xel', NULL, NULL, NULL)
+    CROSS APPLY (SELECT CAST(event_data AS XML) AS event_data) AS x
+WHERE 
+    x.event_data.value('(event/data[@name="statement"]/value)[1]', 'nvarchar(max)') LIKE '%usp_Get_Physical_Status1D%'
+GO
+
