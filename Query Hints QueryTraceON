@@ -9,3 +9,22 @@
 E.G  OPTION (QUERYTRACEON 8649)
 
 OPTION(  QUERYRULEOFF JoinCommute )
+
+
+OPTION 
+(
+    RECOMPILE
+    --, QUERYRULEOFF GbAggBeforeJoin -- 0.0295655
+    --, QUERYRULEOFF INtoIdxLookup -- 0.0313199
+    --, QUERYRULEOFF JIttoSM -- 0.0431176
+    --, QUERYRULEOFF SelIdxToRng -- 0.0510932
+    --, QUERYRULEOFF GetIdxToFlt -- 0.0531899
+    --, QUERYRULEOFF SELanJN -- 1.12444
+    --, QUERYRULEOFF BuildSpool -- 3.59983
+    --, QUERYRULEOFF GbAggToStrm -- 3.59983
+    --, QUERYRULEOFF NormalizeGbAgg -- 3.59983
+    --, QUERYRULEOFF Gem1GAgg -- 3.65536
+    --, QUERYRULEOFF JoinCommute -- 3.65536
+    --, QUERYRULEOFF SelectToFilter -- Error 8622
+)
+GO
