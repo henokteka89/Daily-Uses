@@ -7,3 +7,5 @@
 4138 -- turns off row goals with TOP / FAST <N> / IN /EXISTS
 
 E.G  OPTION (QUERYTRACEON 8649)
+
+OPTION(  QUERYRULEOFF JoinCommute )
