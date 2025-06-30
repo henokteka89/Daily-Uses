@@ -1,0 +1,35 @@
+SELECT TOP 10
+       er.session_id
+     , er.status
+     , er.cpu_time
+     , er.logical_reads LogcReads
+     , er.reads
+     , er.writes
+     , SUBSTRING(qt.text
+                , (er.statement_start_offset / 2) + 1
+                , ((CASE er.statement_end_offset
+                      WHEN -1 THEN DATALENGTH(qt.text)
+                      ELSE er.statement_end_offset
+                   END - er.statement_start_offset) / 2) + 1) AS [statement]
+     , er.granted_query_memory GrntMemory
+     , ib.event_info AS [buffer]
+     , es.login_name
+     , p.query_plan
+     , qt.text AS [sql]
+     , er.wait_type
+     , er.last_wait_type waittype
+     , es.login_time
+     , es.host_name
+FROM   sys.dm_exec_requests er WITH (NOLOCK)
+       OUTER APPLY sys.dm_exec_input_buffer(er.session_id, er.request_id) ib
+       OUTER APPLY sys.dm_exec_sql_text(er.sql_handle) qt
+       OUTER APPLY sys.dm_exec_query_statistics_xml(er.session_id) p
+       LEFT JOIN sys.dm_exec_connections c WITH (NOLOCK) ON er.session_id = c.session_id
+       LEFT JOIN sys.dm_exec_sessions es WITH (NOLOCK) ON er.session_id = es.session_id
+WHERE  er.status <> 'background'
+       AND er.session_id > 50
+       AND er.session_id <> @@SPID
+       AND DB_NAME(er.database_id) NOT IN ('MASTER', 'MSDB')
+       AND er.cpu_time > 500
+ORDER BY er.cpu_time DESC
+OPTION (RECOMPILE, MAXDOP 1)
