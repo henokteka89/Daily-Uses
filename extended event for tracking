@@ -14,7 +14,7 @@ END
 CREATE EVENT SESSION [CaptureRPCEventRecord] ON SERVER
 ADD EVENT sqlserver.rpc_completed(
     ACTION(sqlserver.database_id, sqlserver.sql_text, sqlserver.username)
-    WHERE ([object_name] LIKE 'usp_Get_Physical_Status1D' AND cpu_time > 5000000) -- with high cputime
+    WHERE ([object_name] LIKE 'usp_Get_StatusID' AND cpu_time > 5000000) -- with high cputime
 )
 ADD TARGET package0.event_file(SET FILENAME=N'C:\Temp\CaptureRPCEventRecord.xel')
 WITH (
@@ -44,6 +44,6 @@ FROM
     sys.fn_xe_file_target_read_file('C:\Temp\CaptureRPCEventRecord*.xel', NULL, NULL, NULL)
     CROSS APPLY (SELECT CAST(event_data AS XML) AS event_data) AS x
 WHERE 
-    x.event_data.value('(event/data[@name="statement"]/value)[1]', 'nvarchar(max)') LIKE '%usp_Get_Physical_Status1D%'
+    x.event_data.value('(event/data[@name="statement"]/value)[1]', 'nvarchar(max)') LIKE '%usp_Get_StatusID%'
 GO
 
