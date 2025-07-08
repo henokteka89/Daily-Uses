@@ -25,20 +25,20 @@ ALTER EVENT SESSION [rpc] ON SERVER STATE = START;
 ALTER EVENT SESSION [rpc] ON SERVER STATE = STOP;
 
 -- Query the ring_buffer for captured events
-SELECT
-    DATEADD(mi, DATEDIFF(mi, GETUTCDATE(), GETDATE()),
-        CAST(event_data.value('(/event/@timestamp)[1]', 'datetime2') as datetime2)) AS [Event Time],
-    event_data.value('(/event/data[@name="cpu_time"]/value)[1]', 'int') AS [CPU Time],
-    event_data.value('(/event/action[@name="sql_text"]/value)[1]', 'nvarchar(max)') AS [SQL Text],
-    event_data.value('(/event/action[@name="username"]/value)[1]', 'nvarchar(256)') AS [Username],
-    event_data.value('(/event/action[@name="database_id"]/value)[1]', 'int') AS [Database ID],
-    event_data.value('(/event/data[@name="statement"]/value)[1]', 'nvarchar(max)') AS STATEMENT
+SELECT  
+    xevent.value('(data[@name="statement"]/value)[1]', 'nvarchar(max)') AS statement_text,
+    --xevent.value('(action[@name="sql_text"]/value)[1]', 'nvarchar(max)') AS sql_text,
+    --xevent.value('(action[@name="username"]/value)[1]', 'nvarchar(256)') AS username,
+    --xevent.value('(data[@name="database_id"]/value)[1]', 'int') AS database_id,
+    --xevent.value('(data[@name="cpu_time"]/value)[1]', 'bigint') AS cpu_time,
+    xevent.value('@timestamp', 'datetime2') AS [timestamp]
 FROM (
-    SELECT CAST(target_data AS XML) AS target_data
+    SELECT CAST(t.target_data AS XML) AS target_xml
     FROM sys.dm_xe_sessions AS s
     JOIN sys.dm_xe_session_targets AS t
         ON s.address = t.event_session_address
-    WHERE s.name = 'rpc'
+    WHERE s.name = 'RPC'
       AND t.target_name = 'ring_buffer'
-) AS tab
-CROSS APPLY target_data.nodes('//RingBufferTarget/event') AS split(event_data);
+) AS data
+CROSS APPLY target_xml.nodes('//event') AS events(xevent);
+
