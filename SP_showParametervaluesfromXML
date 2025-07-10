@@ -1,0 +1,75 @@
+   /*
+        Purpose:
+        This stored procedure extracts parameter values from an XML-like string
+        using string functions and returns them in a key-value format.
+
+        It parses `<ColumnReference>` elements, extracting:
+        - Column name (`Column`)
+        - Parameter value (`ParameterRuntimeValue`)
+        - Data type (`ParameterDataType`) ('ParameterDataType')
+
+        The output is a single string representing parameter assignments.
+
+        Sample Execution:
+        
+        EXEC sp_showparametervaluesfromxml @xml = 
+        '<ColumnReference Column="@MaxReputation" ParameterDataType="int" ParameterCompiledValue="(10000)" ParameterRuntimeValue="(10000)" />
+         <ColumnReference Column="@MinReputation" ParameterDataType="int" ParameterCompiledValue="(5000)" ParameterRuntimeValue="(5000)" />'
+          --When there are quotes like date = '2025-03-19' , make sure to change that to double quote ''2025-03-19''
+        Expected Output:
+       ________________________________________________________________
+       | ParameterValues                                               |
+       |_____________________________________________________________  |
+       | Declare MaxReputation int = 10000,@MinReputation int = 5000   |
+       ________________________________________________________________
+    */
+
+CREATE OR ALTER PROCEDURE sp_showparametervaluesfromxml
+    @xml NVARCHAR(MAX)
+AS
+BEGIN
+    -- Extract parameter values using string functions
+    DECLARE @startPos INT = 1;
+    DECLARE @endPos INT;
+    DECLARE @result NVARCHAR(MAX) = N'';
+
+    WHILE @startPos > 0
+    BEGIN
+        SET @startPos = CHARINDEX('<columnReference', @xml, @startPos);
+        IF @startPos = 0
+            BREAK;
+
+        SET @endPos = CHARINDEX('/>', @xml, @startPos) + 2;
+
+        DECLARE @element NVARCHAR(MAX) = SUBSTRING(@xml, @startPos, @endPos - @startPos);
+
+        DECLARE @ColumnName NVARCHAR(MAX) = SUBSTRING(
+            @element,
+            CHARINDEX('Column="', @element) + 8,
+            CHARINDEX('"', @element, CHARINDEX('Column="', @element) + 8) - CHARINDEX('Column="', @element) - 8
+        );
+
+        DECLARE @DataType NVARCHAR(MAX) = SUBSTRING(
+            @element,
+            CHARINDEX('ParamDataType="', @element) + 19,
+            CHARINDEX('"', @element, CHARINDEX('ParamDataType="', @element) + 19) - CHARINDEX('ParamDataType="', @element) - 19
+        );
+
+        DECLARE @ParameterValue NVARCHAR(MAX) = SUBSTRING(
+            @element,
+            CHARINDEX('ParameterCompiledValue="', @element) + 24,
+            CHARINDEX('"', @element, CHARINDEX('ParameterCompiledValue="', @element) + 24) 
+            - CHARINDEX('ParameterCompiledValue="', @element) - 24
+        );
+
+        SET @result = @result + N',' + @ColumnName + N' = ' +
+            CASE WHEN @ParameterValue = 'NULL' THEN 'NULL'
+                 ELSE Replace(Replace(@ParameterValue, '(', ''), ')', '')
+            END;
+
+        SET @startPos = @endPos;
+    END;
+
+    SELECT STUFF(@result, 1, 1, '') AS ParameterValues;
+END;
+ 
