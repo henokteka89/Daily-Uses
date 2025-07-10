@@ -13,7 +13,7 @@ SELECT
     SCHEMA_NAME(t.[schema_id]) AS [schema_name],
     i.[name] AS [table_name], i.[name] AS [index_name],
     c.[name] AS [column_name], ic.key_ordinal AS [column_position],
-    ic.is_included_column AS [is_included], i.fill_factor, i.is_padded,
+    ic.is_included_column AS [is_included], i.fill_factor, i.is_padded,i.is_disabled,
     i.allow_row_locks, i.allow_page_locks, i.has_filter, i.filter_definition,
     i.ignore_dup_key, fg.[name] AS [filegroup]
 INTO #indexProperties
