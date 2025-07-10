@@ -24,16 +24,16 @@ INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.colu
 LEFT JOIN sys.filegroups fg ON i.data_space_id = fg.data_space_id
 WHERE i.[name] = ''' + @indexname + ''' AND t.[name] = ''' + @tablename + ''''
 
-DECLARE @colList NVARCHAR(MAX) = '';
-DECLARE @includedColList NVARCHAR(MAX) = '';
+DECLARE @colList NVARCHAR(MAX) = '''';
+DECLARE @includedColList NVARCHAR(MAX) = '''';
 DECLARE @fillFactor INT, @is_padded BIT, @is_disabled BIT, @allow_row_locks BIT, @allow_page_locks BIT;
 DECLARE @is_filtered BIT, @filterDefinition NVARCHAR(MAX), @ignoredupkey BIT, @filegroup NVARCHAR(100);
 
-SELECT @colList = STRING_AGG(column_name, ', ')
+SELECT @colList = STRING_AGG(column_name, '', '')
 FROM #indexProperties
 WHERE is_included = 0;
 
-SELECT @includedColList = STRING_AGG(column_name, ', ')
+SELECT @includedColList = STRING_AGG(column_name, '', '')
 FROM #indexProperties
 WHERE is_included = 1;
 
