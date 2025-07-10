@@ -1,13 +1,14 @@
 USE [master]
 GO
-ALTER PROC [dbo].[sp_scriptoutindex] @indexname NVARCHAR(255), @tablename NVARCHAR(255), @dbname NVARCHAR(255) = 'es'
+Create or ALTER PROC [dbo].[sp_scriptoutindex] @indexname NVARCHAR(255), 
+@tablename NVARCHAR(255), @dbname NVARCHAR(255) = 'es'
 AS
-DECLARE @sql NVARCHAR(MAX) = 'USE ' + QUOTENAME(@dbname);
+DECLARE @sql NVARCHAR(MAX) = 'USE ' + QUOTENAME(@dbname) + ';
 DECLARE @sort_in_tempdb BIT = 0, @statistics_norecompute BIT = 0, @drop_existing BIT = 0, @online BIT = 0,
-        @maxdop TINYINT = 1, @data_compression BIT = 0, @data_compression_type VARCHAR(4) = 'NONE';
+        @maxdop TINYINT = 1, @data_compression BIT = 0, @data_compression_type VARCHAR(4) = ''NONE'';
 
 SET NOCOUNT ON
-IF EXISTS (SELECT * FROM [tempdb].[sys].[objects] WHERE [name] LIKE '#indexProperties%')
+IF EXISTS (SELECT * FROM [tempdb].[sys].[objects] WHERE [name] LIKE ''#indexProperties%'')
     DROP TABLE #indexProperties;
 SELECT
     SCHEMA_NAME(t.[schema_id]) AS [schema_name],
@@ -22,7 +23,7 @@ INNER JOIN sys.tables t ON i.[object_id] = t.[object_id]
 INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
 INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
 LEFT JOIN sys.filegroups fg ON i.data_space_id = fg.data_space_id
-WHERE i.[name] = ''' + @indexname + ''' AND t.[name] = ''' + @tablename + ''''
+WHERE i.[name] = ''' + @indexname + ''' AND t.[name] = ''' + @tablename + '''
 
 DECLARE @colList NVARCHAR(MAX) = '''';
 DECLARE @includedColList NVARCHAR(MAX) = '''';
@@ -49,23 +50,26 @@ SELECT
     @filegroup = [filegroup]
 FROM #indexProperties;
 
-PRINT 'CREATE NONCLUSTERED INDEX [' + @indexname + '] ON [' + SCHEMA_NAME() + '].[' + @tablename + '] (' + @colList + ') '
-    + CASE WHEN @includedColList IS NOT NULL THEN ' INCLUDE (' + @includedColList + ')' ELSE '' END
-    + CASE WHEN @is_filtered = 1 THEN ' WHERE (' + @filterDefinition + ')' ELSE '' END
-    + '
-WITH ( PAD_INDEX = ' + CASE WHEN @is_padded = 1 THEN 'ON' ELSE 'OFF' END
-    + ', FILLFACTOR = ' + CASE WHEN @fillFactor = 0 THEN '100' ELSE CAST(ISNULL(CAST(@fillFactor AS INT),100) AS VARCHAR(3)) END
-    + ', IGNORE_DUP_KEY = ' + CASE WHEN @ignoredupkey = 1 THEN 'ON' ELSE 'OFF' END
-    + ', ALLOW_ROW_LOCKS = ' + CASE WHEN @allow_row_locks = 1 THEN 'ON' ELSE 'OFF' END
-    + ', ALLOW_PAGE_LOCKS = ' + CASE WHEN @allow_page_locks = 1 THEN 'ON' ELSE 'OFF' END
-    + ', SORT_IN_TEMPDB = ' + CASE WHEN @sort_in_tempdb = 1 THEN 'ON' ELSE 'OFF' END
-    + ', STATISTICS_NORECOMPUTE = ' + CASE WHEN @statistics_norecompute = 1 THEN 'ON' ELSE 'OFF' END
-    + ', DROP_EXISTING = ' + CASE WHEN @drop_existing = 1 THEN 'ON' ELSE 'OFF' END
-    + ', ONLINE = ' + CASE WHEN @online = 1 THEN 'ON' ELSE 'OFF' END
-    + ', MAXDOP = ' + CAST(ISNULL(CAST(@maxdop AS INT),0) AS VARCHAR(1))
-    + ', DATA_COMPRESSION = ' + CASE WHEN @data_compression = 1 THEN QUOTENAME(@data_compression_type, '''') ELSE 'NONE' END
-    + ' );'
+PRINT 
+     ''CREATE NONCLUSTERED INDEX [' + @indexname + '] ON ['' + SCHEMA_NAME() + ''].[' + @tablename + '] ('' + @colList + '') ''
+    + CASE WHEN @includedColList IS NOT NULL THEN '' INCLUDE ('' + @includedColList + '')'' ELSE '''' END
+    + CASE WHEN @is_filtered = 1 THEN '' WHERE ('' + @filterDefinition + '')'' ELSE '''' END
+    + ''
+WITH ( PAD_INDEX = '' + CASE WHEN @is_padded = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' FILLFACTOR = '' + CASE WHEN @fillFactor = 0 THEN ''100'' 
+	ELSE CAST(ISNULL(CAST(@fillFactor AS INT),100) AS VARCHAR(3)) END + '', ''
+    + '' IGNORE_DUP_KEY = '' + CASE WHEN @ignoredupkey = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' ALLOW_ROW_LOCKS = '' + CASE WHEN @allow_row_locks = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' ALLOW_PAGE_LOCKS = '' + CASE WHEN @allow_page_locks = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' SORT_IN_TEMPDB = '' + CASE WHEN @sort_in_tempdb = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' STATISTICS_NORECOMPUTE = '' + CASE WHEN @statistics_norecompute = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' DROP_EXISTING = '' + CASE WHEN @drop_existing = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' ONLINE = '' + CASE WHEN @online = 1 THEN ''ON,'' ELSE ''OFF,'' END
+    + '' MAXDOP = '' + CAST(ISNULL(CAST(@maxdop AS INT),0) AS VARCHAR(1)) + '', ''
+    + '' DATA_COMPRESSION = '' + CASE WHEN @data_compression = 1 
+	THEN QUOTENAME(@data_compression_type, '''') ELSE ''NONE'' END
+    + '' );'';
 
-SET NOCOUNT OFF;
-PRINT @sql
+SET NOCOUNT OFF ';
+--PRINT @sql
 EXEC sp_executesql @sql
