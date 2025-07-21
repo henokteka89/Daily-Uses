@@ -1,0 +1,51 @@
+-- Drop Extended Events Session If It Exists:
+IF EXISTS (
+    SELECT 1 
+    FROM sys.server_event_sessions 
+    WHERE name = 'AllWaitsForSingleSession'
+)
+DROP EVENT SESSION [AllWaitsForSingleSession] ON SERVER;
+
+-- Make sure the folder C:\temp\ exists and SQL Server can write to it
+
+CREATE EVENT SESSION [AllWaitsForSingleSession] ON SERVER
+ADD EVENT sqlos.wait_info (
+    ACTION(sqlserver.sql_text)
+    WHERE (sqlserver.session_id > 60 AND duration >= 100000 AND opcode = 1)
+),
+ADD EVENT sqlos.wait_info_external (
+    ACTION(sqlserver.sql_text)
+    WHERE (sqlserver.session_id > 60 AND duration >= 100000 AND opcode = 1)
+)
+ADD TARGET package0.event_file (
+    SET filename = N'C:\temp\waits.xel'
+);
+GO
+-- Start Stop
+ALTER EVENT SESSION [AllWaitsForSingleSession] ON SERVER STATE = START;
+--ALTER EVENT SESSION [AllWaitsForSingleSession] ON SERVER STATE = STOP;
+
+
+-- Load XE file into temp table
+SELECT * 
+INTO #xe1 
+FROM sys.fn_xe_file_target_read_file('C:\temp\waits*.xel', NULL, NULL, NULL) AS t;
+GO
+
+-- Parse XML from the temp table
+;WITH xmldata([object_name], event_data) AS (
+    SELECT 
+        [object_name], 
+        CONVERT(XML, event_data)
+    FROM #xe1
+)
+SELECT
+    event_data.value('(/event/@name)[1]', 'varchar(40)') AS EventName,
+    event_data.value('(/event/@timestamp)[1]', 'datetime') AS EventTime,
+    event_data.value('(/event/data[@name="wait_type"]/text)[1]', 'varchar(64)') AS WaitType,
+    event_data.value('(/event/data[@name="opcode"]/text)[1]', 'varchar(16)') AS OpCode,
+    CAST(event_data.value('(/event/data[@name="duration"]/value)[1]', 'bigint') / 1000000.0 AS decimal(10,3)) AS DurationInSeconds
+FROM xmldata
+order by DurationInSeconds desc ;
+
+Drop table if exists #xe1
