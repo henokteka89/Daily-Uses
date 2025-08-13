@@ -1,3 +1,5 @@
+Use DBNAME
+Go;
 WITH procstats AS (
     SELECT 
         DB_NAME(ps.database_id) AS database_name,
