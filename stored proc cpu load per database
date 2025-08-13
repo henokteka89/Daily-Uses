@@ -1,0 +1,27 @@
+WITH procstats AS (
+    SELECT 
+        DB_NAME(ps.database_id) AS database_name,
+        OBJECT_NAME(ps.object_id, ps.database_id) AS procedure_name,
+        ps.execution_count,
+        CAST(ps.total_worker_time / 1000.0 AS DECIMAL(18,2)) AS total_cpu_ms,
+        CAST(ps.total_worker_time / 1000.0 / ps.execution_count AS DECIMAL(18,2)) AS avg_cpu_ms,
+        CAST(ps.max_worker_time / 1000.0 AS DECIMAL(18,2)) AS max_cpu_time
+    FROM sys.dm_exec_procedure_stats ps
+    WHERE ps.database_id <> DB_ID() -- Remove to include all databases
+        AND OBJECT_NAME(ps.object_id, ps.database_id) NOT IN ('')
+),  
+Totalcpu AS (
+    SELECT SUM(total_cpu_ms) AS total_cpu FROM procstats
+)
+SELECT TOP 10
+    p.database_name,
+    p.procedure_name,
+    p.execution_count,
+    p.total_cpu_ms,
+    p.max_cpu_time,
+    p.avg_cpu_ms,
+    CAST(100.0 * p.total_cpu_ms / t.total_cpu AS DECIMAL(5,2)) AS cpu_load_percent
+FROM procstats p
+CROSS JOIN Totalcpu t
+WHERE execution_count > 1000
+ORDER BY cpu_load_percent DESC;
