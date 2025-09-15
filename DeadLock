@@ -1,0 +1,26 @@
+-- Get deadlock information from system_health Extended Event session
+WITH DeadlockEvents AS
+(
+    SELECT 
+        XEvent.value('(event/data/value)[1]', 'varchar(max)') AS DeadlockGraphXML,
+        XEvent.value('(event/@timestamp)[1]', 'datetime2') AS [Timestamp]
+    FROM (
+        SELECT CAST(event_data AS XML) AS XEvent
+        FROM sys.fn_xe_file_target_read_file
+        (
+            (SELECT CAST(target_data AS XML) 
+             FROM sys.dm_xe_sessions AS s
+             JOIN sys.dm_xe_session_targets AS t
+             ON s.address = t.event_session_address
+             WHERE s.name = 'system_health' AND t.target_name = 'event_file')
+            .value('(EventFileTarget/File/@name)[1]', 'varchar(512)'),
+            NULL, NULL, NULL
+        )
+    ) AS tab
+    WHERE XEvent.value('(event/@name)[1]', 'varchar(256)') = 'xml_deadlock_report'
+)
+SELECT 
+    [Timestamp],
+    DeadlockGraphXML
+FROM DeadlockEvents
+ORDER BY [Timestamp] DESC;
