@@ -1,0 +1,139 @@
+Clear-Host
+
+# -----------------------------
+# Configuration
+# -----------------------------
+
+$ComputerName = "vmg19039p"
+$Username     = "DOMAIN\User"
+$Password     = "SecurePasswordHere"
+
+$HoursBack    = 24
+$EventIds     = @(1074,1076,6008,41,1,12)
+
+# Text filter terms (case-insensitive). Set @() for no text filter
+$TextFilter   = @("reboot", "shutdown")
+
+# Disk type preference (Standard/Premium can be adjusted elsewhere)
+# -----------------------------
+
+$SecurePass = ConvertTo-SecureString $Password -AsPlainText -Force
+$Credential = New-Object System.Management.Automation.PSCredential($Username, $SecurePass)
+
+$StartTimeUtc = (Get-Date).AddHours(-[math]::Abs($HoursBack)).ToUniversalTime().ToString("o")
+
+# -----------------------------
+# Helper: Translate SID → Account
+# -----------------------------
+function Resolve-SID {
+    param(
+        [string]$Sid
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Sid)) {
+        return $null
+    }
+
+    try {
+        switch ($Sid) {
+            "S-1-5-18" { return "NT AUTHORITY\SYSTEM" }
+            "S-1-5-19" { return "NT AUTHORITY\LOCAL SERVICE" }
+            "S-1-5-20" { return "NT AUTHORITY\NETWORK SERVICE" }
+            default {
+                return (New-Object System.Security.Principal.SecurityIdentifier($Sid)).
+                       Translate([System.Security.Principal.NTAccount]).Value
+            }
+        }
+    }
+    catch {
+        return $Sid # fallback to raw SID text
+    }
+}
+
+# -----------------------------
+# Build XML Filter
+# -----------------------------
+$IdClauses = $EventIds | ForEach-Object { "EventID=$_"} -join " or "
+
+$XPath = @"
+<QueryList>
+  <Query Id="0" Path="System">
+    <Select Path="System">
+      *[System[
+        ($IdClauses)
+        and TimeCreated[@SystemTime >= '$StartTimeUtc']
+      ]]
+    </Select>
+  </Query>
+</QueryList>
+"@
+
+# -----------------------------
+# Remote Event Query
+# -----------------------------
+$RawEvents = Invoke-Command -ComputerName $ComputerName -Credential $Credential -ScriptBlock {
+    param($XPath)
+
+    Get-WinEvent -FilterXml $XPath -ErrorAction Stop
+} -ArgumentList $XPath
+
+# -----------------------------
+# Optional Text Filtering
+# -----------------------------
+if ($TextFilter.Count -gt 0) {
+    $Pattern = ($TextFilter | ForEach-Object { [regex]::Escape($_) }) -join "|"
+    $RawEvents = $RawEvents | Where-Object {
+        $_.Message -match $Pattern
+    }
+}
+
+# -----------------------------
+# Parse & Shape Output
+# -----------------------------
+$Results = foreach ($ev in $RawEvents) {
+
+    $xml = [xml]$ev.ToXml()
+
+    $UserSid = $xml.Event.System.Security.UserID
+    $User    = Resolve-SID $UserSid
+
+    $Reason  = $null
+    $Process = $null
+    $Comment = $null
+
+    foreach ($data in $xml.Event.EventData.Data) {
+        switch ($data.Name) {
+            "Reason"  { $Reason  = $data.'#text' }
+            "Process" { $Process = $data.'#text' }
+            "Comment" { $Comment = $data.'#text' }
+        }
+    }
+
+    [pscustomobject]@{
+        Computer     = $ev.MachineName
+        EventId      = $ev.Id
+        Level        = $ev.LevelDisplayName
+        TimeCreated  = $ev.TimeCreated.ToLocalTime()
+        User         = $User
+        Source       = $ev.ProviderName
+        Process      = $Process
+        Reason       = $Reason
+        Comment      = $Comment
+        Message      = $ev.Message
+    }
+}
+
+# -----------------------------
+# Output
+# -----------------------------
+if ($Results.Count -gt 0) {
+    if (Get-Command Out-GridView -ErrorAction SilentlyContinue) {
+        $Results | Out-GridView -Title "Remote Event Log ($ComputerName) - Last $HoursBack Hour(s)"
+    }
+    else {
+        $Results | Format-Table -AutoSize
+    }
+}
+else {
+    Write-Warning "No events matched the filter in the last $HoursBack hour(s)."
+}
