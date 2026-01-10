@@ -1,0 +1,62 @@
+DECLARE @sql NVARCHAR(4000)
+DECLARE @size INT
+DECLARE @logicalname VARCHAR(100) = 'mirth'
+
+SELECT @size =
+    size/128 * .99 - AS CurrentSizeMB,
+    size/128 AS SizeMB,
+    name
+FROM sys.database_files
+WHERE name = @logicalname
+
+SELECT @size
+
+WHILE @size > 700000
+BEGIN
+    WAITFOR DELAY '00:21' -- stop at 9pm
+    SET @sql = 'DBCC SHRINKFILE (N''' + @logicalname + ''', ' + CAST(@size AS VARCHAR) + ')'
+
+    PRINT @sql
+    EXEC sys.sp_executesql @sql
+
+    SELECT @size =
+        size/128 * .99 - AS CurrentSizeMB,
+        size/128 AS SizeMB,
+        name
+    FROM sys.database_files
+    WHERE name = @logicalname
+END
+
+
+-- Monitor
+
+SELECT DISTINCT
+    req.session_id,
+    req.status,
+    req.command,
+    req.cpu_time,
+    req.total_elapsed_time,
+    req.wait_type,
+    req.wait_time,
+    req.last_wait_type,
+    DB_NAME(snl.resource_database_id) AS dbid,
+    OBJECT_SCHEMA_NAME(scs.objid, scs.dbid) AS SchemaName,
+    OBJECT_NAME(scs.objid, scs.dbid) AS TableName,
+    scs.resource_type,
+    scs.resource_subtype,
+    scs.index_id AS IndexId,
+    scs.lock_mode AS LockMode,
+    scs.request_status AS ReqStatus,
+    ses.login_name,
+    ses.host_name,
+    ses.program_name
+FROM sys.dm_exec_requests req
+INNER JOIN sys.dm_exec_sessions ses
+    ON req.session_id = ses.session_id
+LEFT JOIN sys.dm_tran_locks snl
+    ON req.session_id = snl.request_session_id
+LEFT JOIN master.dbo.syslockinfo scs
+    ON scs.req_spid = req.session_id AND scs.objid <> 0
+LEFT JOIN sys.indexes ind
+    ON scs.rsc_objid = ind.object_id AND scs.rsc_indid = ind.index_id
+WHERE req.command LIKE '%DBCC%' -- or 'UpdateStats' 'DbccCheckDB'
