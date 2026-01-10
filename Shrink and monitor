@@ -1,37 +1,45 @@
+SHRINKING
+--
+--Change the following
+  -- @logicalname - logical name of the file you wanted to shrink (data or log of a database)
+  -- @Size to what size you want to shrink it to. For instance if you want to shrink the size to 200gb, put 200000. If you want to claim all the space, put 0. 
+  -- Be in the database you want to shrink the size of 
+--
+Use DBname
+Go
+
 DECLARE @sql NVARCHAR(4000)
 DECLARE @size INT
-DECLARE @logicalname VARCHAR(100) = 'mirth'
+DECLARE @logicalname VARCHAR(100) = 'admin_log' -- Change
 
-SELECT @size =
-    size/128 * .99 - AS CurrentSizeMB,
-    size/128 AS SizeMB,
-    name
+SET @size = ( 
+SELECT size/128 * .99 -- AS CurrentSizeMB,
 FROM sys.database_files
 WHERE name = @logicalname
-
+)
 SELECT @size
 
 WHILE @size > 700000
+AND DatePart(Hour,Getdate()) < 21 --to stop at 9PM
 BEGIN
-    WAITFOR DELAY '00:21' -- stop at 9pm
+   -- Print 'Start shrinking'
     SET @sql = 'DBCC SHRINKFILE (N''' + @logicalname + ''', ' + CAST(@size AS VARCHAR) + ')'
 
     PRINT @sql
     EXEC sys.sp_executesql @sql
 
-    SELECT @size =
-        size/128 * .99 - AS CurrentSizeMB,
-        size/128 AS SizeMB,
-        name
-    FROM sys.database_files
-    WHERE name = @logicalname
+   SET @size = ( 
+SELECT size/128 * .99 -- AS CurrentSizeMB,
+FROM sys.database_files
+WHERE name = @logicalname
+)
 END
 
 
--- Monitor
+-- Monitor on a separate window
 
 SELECT DISTINCT
-    req.session_id,
+    req.session_id, req.start_time, 
     req.status,
     req.command,
     req.cpu_time,
@@ -39,8 +47,9 @@ SELECT DISTINCT
     req.wait_type,
     req.wait_time,
     req.last_wait_type,
-    DB_NAME(snl.resource_database_id) AS dbid,
-    OBJECT_SCHEMA_NAME(scs.objid, scs.dbid) AS SchemaName,
+    --DB_NAME(snl.resource_database_id) AS dbid,
+    --OBJECT_SCHEMA_NAME(scs.objid, scs.dbid) AS SchemaName,
+    req.percent_complete,
     OBJECT_NAME(scs.objid, scs.dbid) AS TableName,
     scs.resource_type,
     scs.resource_subtype,
