@@ -1,92 +1,280 @@
+ 
+/*
+    Generates US Federal Holidays for a specified year.
 
-DECLARE @Year char(4)
-, @Date datetime
-, @Holiday datetime
+    Includes:
+        New Year's Day
+        Martin Luther King Jr. Day
+        Washington's Birthday (Presidents Day)
+        Memorial Day
+        Juneteenth
+        Independence Day
+        Labor Day
+        Columbus Day
+        Veterans Day
+        Thanksgiving Day
+        Christmas Day
 
-SET @Year = 2039
+    Weekend holidays are adjusted to observed dates:
+        Saturday  -> Friday
+        Sunday    -> Monday
+For instance 2026 Independence day falls on Saturday July 04, but this will show July 03 Friday since it is observed the day before when it fall on weekend. 
+The same for 2039 new year shows Dec 31, 2038 because it falls on Saturday.
 
-Declare @publicHolidays table (Holiday nvarchar(70), Date Datetime, DayofWeek nvarchar(10))
---Insert into @publicHolidays (Holiday, Date, DayofWeek)
----- New Years Day
-SET @Date=CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-01-01' ) 
-IF DATENAME( dw, @Date ) = 'Saturday'
-    SET @Date=@Date-1
-ELSE IF DATENAME( dw, @Date ) = 'Sunday'
-    SET @Date=@Date+1
-Insert into @publicHolidays (Holiday, Date, DayofWeek)
- SELECT 'New Years Day', @Date, DATENAME( dw, @Date ) 
---select * from @publicHolidays
----- Martin L King's Birthday ( 3rd Monday in January )
-SET @Date = CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-01-01' ) 
-SET @Holiday = DATEADD( wk, DATEDIFF( wk, 0, dateadd( dd, 18-datepart( day, @Date ), @Date ) ), 0 ) -- 3rd Monday of the Month
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT 'Martin L King''s Birthday', @Holiday, DATENAME( dw, @Holiday )
+*/
 
----- President’s Day ( 3rd Monday in February )
-SET @Date = CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-02-01' ) 
-SET @Holiday = DATEADD( wk, DATEDIFF( wk, 0, dateadd( dd, 18-datepart( day, @Date ), @Date ) ), 0 ) -- 3rd Monday of the Month
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT 'President’s Day', @holiday, DATENAME( dw, @Holiday ) 
+DECLARE @Year int = 2039;
 
----- Memorial Day ( Last Monday in May )
-SET @Date = CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-05-01' ) 
-SET @Holiday = DATEADD( wk, DATEDIFF( wk, 0, dateadd( dd, 30-datepart( day, @Date ), @Date ) ), 0 ) -- 5th Monday of the Month
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT 'Memorial Day', @Holiday, DATENAME( dw, @Holiday )
----- Independence Day ( July 4 )
-SET @Date=CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-07-04' ) 
-IF DATENAME( dw, @Date ) = 'Saturday'
-    SET @Date=@Date-1
-ELSE IF DATENAME( dw, @Date ) = 'Sunday'
-    SET @Date=@Date+1
-Insert into @publicHolidays (holiday, Date, DayofWeek)
+DECLARE @PublicHolidays TABLE
+(
+      HolidayName varchar(100)
+    , HolidayDate date
+    , DayOfWeek varchar(20)
+);
 
-SELECT  'Independence Day', @Date, DATENAME( dw, @Date ) 
+---------------------------------------------------------
+-- New Year's Day
+---------------------------------------------------------
+DECLARE @Holiday date = DATEFROMPARTS(@Year,1,1);
 
----- Labor Day ( 1st Monday in September )
-SET @Date = CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-09-01' ) 
-SET @Holiday = DATEADD( wk, DATEDIFF( wk, 0, dateadd( dd, 6-datepart( day, @Date ), @Date ) ), 0 ) -- 1st Monday of the Month
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT  'Labor Day',@Holiday, DATENAME( dw, @Holiday ) 
+IF DATENAME(WEEKDAY,@Holiday) = 'Saturday'
+    SET @Holiday = DATEADD(DAY,-1,@Holiday);
+ELSE IF DATENAME(WEEKDAY,@Holiday) = 'Sunday'
+    SET @Holiday = DATEADD(DAY,1,@Holiday);
 
----- Columbus Day ( 2nd Monday in October )
-SET @Date = CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-10-01' ) 
-SET @Holiday = DATEADD( wk, DATEDIFF( wk, 0, dateadd( dd, 12-datepart( day, @Date ), @Date ) ), 0 ) -- 2nd Monday of the Month
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT  'Columbus Day', @Holiday, DATENAME( dw, @Holiday ) 
+INSERT INTO @PublicHolidays
+SELECT
+      'New Year''s Day'
+    , @Holiday
+    , DATENAME(WEEKDAY,@Holiday);
 
----- Veteran’s Day ( November 11 )
-SET @Date=CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-11-11' ) 
-IF DATENAME( dw, @Date ) = 'Saturday'
-    SET @Date=@Date-1
-ELSE IF DATENAME( dw, @Date ) = 'Sunday'
-    SET @Date=@Date+1
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT  'Veteran''s Day', @Date, DATENAME( dw, @Date ) 
+---------------------------------------------------------
+-- Martin Luther King Jr Day
+-- Third Monday in January
+---------------------------------------------------------
+;WITH D AS
+(
+    SELECT DATEFROMPARTS(@Year,1,1) AS Dt
+    UNION ALL
+    SELECT DATEADD(DAY,1,Dt)
+    FROM D
+    WHERE MONTH(DATEADD(DAY,1,Dt)) = 1
+)
+INSERT INTO @PublicHolidays
+SELECT TOP (1)
+      'Martin Luther King Jr. Day'
+    , Dt
+    , DATENAME(WEEKDAY,Dt)
+FROM
+(
+    SELECT
+          Dt
+        , ROW_NUMBER() OVER(ORDER BY Dt) AS RN
+    FROM D
+    WHERE DATENAME(WEEKDAY,Dt)='Monday'
+) X
+WHERE RN = 3
+OPTION (MAXRECURSION 31);
 
----- Thanksgiving Day ( 4th Thursday in November )
-SET @Date = CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-11-04' ) 
-SET @Holiday = DATEADD( wk, DATEDIFF( wk, 0, dateadd( dd, 22-datepart( day, @Date ), @Date ) ), 0 )+3 -- 4th Thursday of the Month
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT 'Thanksgiving Day', @Holiday, DATENAME( dw, @Holiday ) 
+---------------------------------------------------------
+-- Presidents Day
+-- Third Monday in February
+---------------------------------------------------------
+;WITH D AS
+(
+    SELECT DATEFROMPARTS(@Year,2,1) AS Dt
+    UNION ALL
+    SELECT DATEADD(DAY,1,Dt)
+    FROM D
+    WHERE MONTH(DATEADD(DAY,1,Dt)) = 2
+)
+INSERT INTO @PublicHolidays
+SELECT TOP (1)
+      'Presidents Day'
+    , Dt
+    , DATENAME(WEEKDAY,Dt)
+FROM
+(
+    SELECT
+          Dt
+        , ROW_NUMBER() OVER(ORDER BY Dt) AS RN
+    FROM D
+    WHERE DATENAME(WEEKDAY,Dt)='Monday'
+) X
+WHERE RN = 3
+OPTION (MAXRECURSION 31);
 
----- Christmas Day ( December 25 )
-SET @Date=CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-12-25' ) 
-IF DATENAME( dw, @Date ) = 'Saturday'
-    SET @Date=@Date-1
-ELSE IF DATENAME( dw, @Date ) = 'Sunday'
-    SET @Date=@Date+1
+---------------------------------------------------------
+-- Memorial Day
+-- Last Monday in May
+---------------------------------------------------------
+;WITH D AS
+(
+    SELECT DATEFROMPARTS(@Year,5,1) AS Dt
+    UNION ALL
+    SELECT DATEADD(DAY,1,Dt)
+    FROM D
+    WHERE MONTH(DATEADD(DAY,1,Dt)) = 5
+)
+INSERT INTO @PublicHolidays
+SELECT TOP (1)
+      'Memorial Day'
+    , Dt
+    , DATENAME(WEEKDAY,Dt)
+FROM D
+WHERE DATENAME(WEEKDAY,Dt)='Monday'
+ORDER BY Dt DESC
+OPTION (MAXRECURSION 31);
 
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT  'Christmas Day',@Date, DATENAME( dw, @Date ) [DayOfWeek]
+---------------------------------------------------------
+-- Juneteenth
+---------------------------------------------------------
+SET @Holiday = DATEFROMPARTS(@Year,6,19);
 
----- New Years Eve Day
-SET @Date=CONVERT( datetime, CONVERT(varchar, YEAR( @Year ) )+'-12-31' ) 
-IF DATENAME( dw, @Date ) = 'Saturday'
-    SET @Date=@Date-1
-ELSE IF DATENAME( dw, @Date ) = 'Sunday'
-    SET @Date=@Date+1
-Insert into @publicHolidays (holiday, Date, DayofWeek)
-SELECT  'New Years Day',@Date,DATENAME( dw, @Date ) [DayOfWeek]
+IF DATENAME(WEEKDAY,@Holiday)='Saturday'
+    SET @Holiday = DATEADD(DAY,-1,@Holiday);
+ELSE IF DATENAME(WEEKDAY,@Holiday)='Sunday'
+    SET @Holiday = DATEADD(DAY,1,@Holiday);
 
-Select * from @publicHolidays
+INSERT INTO @PublicHolidays
+SELECT
+      'Juneteenth'
+    , @Holiday
+    , DATENAME(WEEKDAY,@Holiday);
+
+---------------------------------------------------------
+-- Independence Day
+---------------------------------------------------------
+SET @Holiday = DATEFROMPARTS(@Year,7,4);
+
+IF DATENAME(WEEKDAY,@Holiday)='Saturday'
+    SET @Holiday = DATEADD(DAY,-1,@Holiday);
+ELSE IF DATENAME(WEEKDAY,@Holiday)='Sunday'
+    SET @Holiday = DATEADD(DAY,1,@Holiday);
+
+INSERT INTO @PublicHolidays
+SELECT
+      'Independence Day'
+    , @Holiday
+    , DATENAME(WEEKDAY,@Holiday);
+
+---------------------------------------------------------
+-- Labor Day
+-- First Monday in September
+---------------------------------------------------------
+;WITH D AS
+(
+    SELECT DATEFROMPARTS(@Year,9,1) AS Dt
+    UNION ALL
+    SELECT DATEADD(DAY,1,Dt)
+    FROM D
+    WHERE MONTH(DATEADD(DAY,1,Dt)) = 9
+)
+INSERT INTO @PublicHolidays
+SELECT TOP (1)
+      'Labor Day'
+    , Dt
+    , DATENAME(WEEKDAY,Dt)
+FROM D
+WHERE DATENAME(WEEKDAY,Dt)='Monday'
+ORDER BY Dt
+OPTION (MAXRECURSION 31);
+
+---------------------------------------------------------
+-- Columbus Day
+-- Second Monday in October
+---------------------------------------------------------
+;WITH D AS
+(
+    SELECT DATEFROMPARTS(@Year,10,1) AS Dt
+    UNION ALL
+    SELECT DATEADD(DAY,1,Dt)
+    FROM D
+    WHERE MONTH(DATEADD(DAY,1,Dt)) = 10
+)
+INSERT INTO @PublicHolidays
+SELECT TOP (1)
+      'Columbus Day'
+    , Dt
+    , DATENAME(WEEKDAY,Dt)
+FROM
+(
+    SELECT
+          Dt
+        , ROW_NUMBER() OVER(ORDER BY Dt) AS RN
+    FROM D
+    WHERE DATENAME(WEEKDAY,Dt)='Monday'
+) X
+WHERE RN = 2
+OPTION (MAXRECURSION 31);
+
+---------------------------------------------------------
+-- Veterans Day
+---------------------------------------------------------
+SET @Holiday = DATEFROMPARTS(@Year,11,11);
+
+IF DATENAME(WEEKDAY,@Holiday)='Saturday'
+    SET @Holiday = DATEADD(DAY,-1,@Holiday);
+ELSE IF DATENAME(WEEKDAY,@Holiday)='Sunday'
+    SET @Holiday = DATEADD(DAY,1,@Holiday);
+
+INSERT INTO @PublicHolidays
+SELECT
+      'Veterans Day'
+    , @Holiday
+    , DATENAME(WEEKDAY,@Holiday);
+
+---------------------------------------------------------
+-- Thanksgiving
+-- Fourth Thursday in November
+---------------------------------------------------------
+;WITH D AS
+(
+    SELECT DATEFROMPARTS(@Year,11,1) AS Dt
+    UNION ALL
+    SELECT DATEADD(DAY,1,Dt)
+    FROM D
+    WHERE MONTH(DATEADD(DAY,1,Dt)) = 11
+)
+INSERT INTO @PublicHolidays
+SELECT TOP (1)
+      'Thanksgiving Day'
+    , Dt
+    , DATENAME(WEEKDAY,Dt)
+FROM
+(
+    SELECT
+          Dt
+        , ROW_NUMBER() OVER(ORDER BY Dt) AS RN
+    FROM D
+    WHERE DATENAME(WEEKDAY,Dt)='Thursday'
+) X
+WHERE RN = 4
+OPTION (MAXRECURSION 31);
+
+---------------------------------------------------------
+-- Christmas Day
+---------------------------------------------------------
+SET @Holiday = DATEFROMPARTS(@Year,12,25);
+
+IF DATENAME(WEEKDAY,@Holiday)='Saturday'
+    SET @Holiday = DATEADD(DAY,-1,@Holiday);
+ELSE IF DATENAME(WEEKDAY,@Holiday)='Sunday'
+    SET @Holiday = DATEADD(DAY,1,@Holiday);
+
+INSERT INTO @PublicHolidays
+SELECT
+      'Christmas Day'
+    , @Holiday
+    , DATENAME(WEEKDAY,@Holiday);
+
+---------------------------------------------------------
+-- Results
+---------------------------------------------------------
+SELECT
+      HolidayName
+    , HolidayDate
+    , DayOfWeek
+FROM @PublicHolidays
+ORDER BY HolidayDate;
+ 
