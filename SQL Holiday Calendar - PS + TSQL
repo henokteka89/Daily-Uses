@@ -1,0 +1,272 @@
+<#
+.Summary
+    Creates (if it does not already exist) and populates a US Federal Holiday
+    calendar table for the current year.
+
+.DESCRIPTION
+    This script creates dbo.HolidayCalendar in the specified utility database
+    if the table does not already exist.
+
+    The script automatically generates US Federal Holidays for the current year
+    and inserts only missing records.
+
+    Duplicate entries are prevented through:
+        1. A UNIQUE INDEX on HolidayDate and HolidayName.
+        2. IF NOT EXISTS checks before inserts.
+
+.NOTES
+    Replace the default database name ("Admin") with your own utility,
+    DBA, administrative, or monitoring database.
+#>
+
+#Requires -Modules SqlServer
+
+Clear-Host
+
+$ServerInstance = "."    # Example: localhost, SQL01, SQL01\INST1
+$DatabaseName   = "Admin"
+$Year           = (Get-Date).Year
+
+Write-Host "Loading US Federal Holidays for $Year..." -ForegroundColor Cyan
+
+############################################################
+# Functions
+############################################################
+
+function Get-NthWeekday {
+    param(
+        [int]$Year,
+        [int]$Month,
+        [System.DayOfWeek]$DayOfWeek,
+        [int]$Occurrence
+    )
+
+    $Date = Get-Date -Year $Year -Month $Month -Day 1
+
+    while ($Date.DayOfWeek -ne $DayOfWeek) {
+        $Date = $Date.AddDays(1)
+    }
+
+    return $Date.AddDays(7 * ($Occurrence - 1))
+}
+
+function Get-LastWeekday {
+    param(
+        [int]$Year,
+        [int]$Month,
+        [System.DayOfWeek]$DayOfWeek
+    )
+
+    $Date = (Get-Date -Year $Year -Month $Month -Day 1).AddMonths(1).AddDays(-1)
+
+    while ($Date.DayOfWeek -ne $DayOfWeek) {
+        $Date = $Date.AddDays(-1)
+    }
+
+    return $Date
+}
+
+############################################################
+# Create Table If Needed
+############################################################
+
+$CreateTableSQL = @"
+IF OBJECT_ID('dbo.HolidayCalendar','U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HolidayCalendar
+    (
+        HolidayID      INT IDENTITY(1,1) PRIMARY KEY,
+        HolidayDate    DATE NOT NULL,
+        HolidayName    VARCHAR(100) NOT NULL,
+        HolidayYear    INT NOT NULL,
+        MonthNumber    TINYINT NOT NULL,
+        MonthName      VARCHAR(20) NOT NULL,
+        DayOfMonth     TINYINT NOT NULL,
+        DayOfWeek      VARCHAR(20) NOT NULL,
+        IsWeekend      BIT NOT NULL,
+        CreatedDate    DATETIME2 NOT NULL
+            DEFAULT SYSUTCDATETIME()
+    );
+END
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'UX_HolidayCalendar_Date_Name'
+)
+BEGIN
+    CREATE UNIQUE INDEX UX_HolidayCalendar_Date_Name
+        ON dbo.HolidayCalendar(HolidayDate, HolidayName);
+END
+"@
+
+Invoke-Sqlcmd `
+    -ServerInstance $ServerInstance `
+    -Database $DatabaseName `
+    -TrustServerCertificate `
+    -Query $CreateTableSQL `
+    -ErrorAction Stop
+
+############################################################
+# Build Holiday Collection
+############################################################
+
+$Holidays = @()
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-Date "$Year-01-01"
+    Name = "New Year's Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-NthWeekday $Year 1 Monday 3
+    Name = "Martin Luther King Jr. Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-NthWeekday $Year 2 Monday 3
+    Name = "Washington's Birthday"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-LastWeekday $Year 5 Monday
+    Name = "Memorial Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-Date "$Year-06-19"
+    Name = "Juneteenth"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-Date "$Year-07-04"
+    Name = "Independence Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-NthWeekday $Year 9 Monday 1
+    Name = "Labor Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-NthWeekday $Year 10 Monday 2
+    Name = "Columbus Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-Date "$Year-11-11"
+    Name = "Veterans Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-NthWeekday $Year 11 Thursday 4
+    Name = "Thanksgiving Day"
+}
+
+$Holidays += [PSCustomObject]@{
+    Date = Get-Date "$Year-12-25"
+    Name = "Christmas Day"
+}
+
+############################################################
+# Insert Holidays
+############################################################
+
+foreach ($Holiday in $Holidays)
+{
+    $HolidayDate = $Holiday.Date.ToString("yyyy-MM-dd")
+    $HolidayName = $Holiday.Name.Replace("'","''")
+    $HolidayYear = $Holiday.Date.Year
+    $MonthNumber = $Holiday.Date.Month
+    $MonthName   = $Holiday.Date.ToString("MMMM")
+    $DayOfMonth  = $Holiday.Date.Day
+    $DayOfWeek   = $Holiday.Date.DayOfWeek
+
+    if ($DayOfWeek -in @('Saturday','Sunday')) {
+        $IsWeekend = 1
+    }
+    else {
+        $IsWeekend = 0
+    }
+
+    $InsertSQL = @"
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.HolidayCalendar
+    WHERE HolidayDate = '$HolidayDate'
+      AND HolidayName = '$HolidayName'
+)
+BEGIN
+    INSERT INTO dbo.HolidayCalendar
+    (
+        HolidayDate,
+        HolidayName,
+        HolidayYear,
+        MonthNumber,
+        MonthName,
+        DayOfMonth,
+        DayOfWeek,
+        IsWeekend
+    )
+    VALUES
+    (
+        '$HolidayDate',
+        '$HolidayName',
+        $HolidayYear,
+        $MonthNumber,
+        '$MonthName',
+        $DayOfMonth,
+        '$DayOfWeek',
+        $IsWeekend
+    )
+END
+"@
+
+    try {
+        Invoke-Sqlcmd `
+            -ServerInstance $ServerInstance `
+            -Database $DatabaseName `
+            -TrustServerCertificate `
+            -Query $InsertSQL `
+            -ErrorAction Stop
+
+        Write-Host "Processed: $HolidayName ($HolidayDate)" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "Failed: $HolidayName" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+    }
+}
+
+############################################################
+# Verify Results
+############################################################
+
+$Result = Invoke-Sqlcmd `
+    -ServerInstance $ServerInstance `
+    -Database $DatabaseName `
+    -TrustServerCertificate `
+    -Query "
+        SELECT COUNT(*) AS HolidayCount
+        FROM dbo.HolidayCalendar
+        WHERE HolidayYear = $Year
+    "
+
+Write-Host ""
+Write-Host "Holiday rows for $Year : $($Result.HolidayCount)" -ForegroundColor Yellow
+
+Invoke-Sqlcmd `
+    -ServerInstance $ServerInstance `
+    -Database $DatabaseName `
+    -TrustServerCertificate `
+    -Query "
+        SELECT
+            HolidayDate,
+            HolidayName,
+            DayOfWeek
+        FROM dbo.HolidayCalendar
+        WHERE HolidayYear = $Year
+        ORDER BY HolidayDate
+    "
