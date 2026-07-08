@@ -1,0 +1,40 @@
+DECLARE @ProcName sysname = N'dbo.usp_GetCustomerActivity';
+
+SELECT
+    OBJECT_NAME(qt.objectid)                          AS proc_name,
+    qs.statement_start_offset,
+    qs.statement_end_offset,
+    qs.execution_count,
+    qs.last_execution_time,
+    qs.total_worker_time  / 1000.0                    AS total_cpu_time_ms,
+    qs.last_worker_time   / 1000.0                    AS last_cpu_time_ms,
+    qs.total_elapsed_time / 1000.0                    AS total_elapsed_time_ms,
+    qs.last_elapsed_time  / 1000.0                    AS last_elapsed_time_ms,
+    qs.total_logical_reads,
+    qs.last_logical_reads,
+    qs.total_logical_writes,
+    qs.last_logical_writes,
+    qs.total_physical_reads,
+    qs.plan_handle,
+    qs.sql_handle,
+    SUBSTRING(
+        qt.text,
+        (qs.statement_start_offset / 2) + 1,
+        ((CASE qs.statement_end_offset WHEN -1 THEN DATALENGTH(qt.text) ELSE qs.statement_end_offset END - qs.statement_start_offset) / 2) + 1
+    )                                                   AS statement_text,
+    tqp.query_plan                                      AS statement_xml_plan   -- isolated plan for JUST this statement/branch
+into #tt
+FROM sys.dm_exec_query_stats qs
+
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) qt
+OUTER APPLY sys.dm_exec_text_query_plan(
+                qs.plan_handle,
+                qs.statement_start_offset,
+                qs.statement_end_offset
+             ) tqp
+WHERE qt.objectid = OBJECT_ID(@ProcName)
+  AND qt.dbid = DB_ID()
+ORDER BY qs.statement_start_offset;
+
+select *, cast(statement_xml_plan AS xml  ) from #tt
+drop table #tt
